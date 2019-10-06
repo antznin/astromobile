@@ -3,6 +3,7 @@
 #include "mex.h"
 
 #include <time.h>
+#include <math.h>
 
 #define PI 3.141592
 
@@ -12,6 +13,7 @@
 #define PX_TO_M 10
 #define T_INSTRUCTION 0.000001
 #define T_READ 0.001
+
 
 typedef struct
 {
@@ -119,60 +121,116 @@ double getClosestStation(coord_t actualPos, coord_t &stationPos)
 
 /********************* A COMPLETER ************************************/
 
-
 // Data structure used for the task data
+
 struct TaskData 
 {
-    coord_t * stationPos;
-    coord_t * dest;
+    coord_t *stationPos;
+    coord_t *dest;
+    coord_t *currPos;
+    coord_t *nextStep;
+    bool needToCharge;
 };
 
-double alerte10_code(int seg, void * data) {
-    
+double alerte10_code(int seg, void * m_data) {
+    TaskData * data = (TaskData *)m_data;
     switch(seg) {
     case 1:
-        ttAnalogOut(4, 30); // consigne vitesse a 30
+        data->needToCharge = true;
         return T_INSTRUCTION;
-    case 2:
-        coord_t currPos;
-        currPos.x = ttAnalogIn(3);
-        currPos.y = ttAnalogIn(4);
-        return 2 * T_READ + T_INSTRUCTION;
-    case 3:
-        double nb_op = 0;
-        // get the closest station and store it in data's stationPos
-        nb_op += getClosestStation(currPos, data->stationPos);
-        return (nb_op) * T_INSTRUCTION;
-        return t_exec;
      default:
          return FINISHED;
     }
             
 }
 
-double alerte80_code(int seg, void * data) {
-    
-//     switch seg {
-//     case 1:
-//         ttAnalogOut(4, 30); // consigne vitesse a 30
-//         return T_INSTRUCTION;
-//     case 2:
-//         double nb_op = 0;
-//         coord_t currPos;
-//         currPos.x = ttAnalogIn(3);
-//         currPos.y = ttAnalogIn(4);
-//         // get the closest station and store it in data's stationPos
-//         nb_op = getClosestStation(currPos, data->stationPos);
-//         return (nb_op + 2) * T_INSTRUCTION + 2 * T_READ;
-//     case 3:
-//         return t_exec;
-//      default:
+double alerte80_code(int seg, void * m_data) {
+    TaskData * data = (TaskData *)m_data;
+    switch(seg) {
+    case 1:
+        data->needToCharge = false;
+        return T_INSTRUCTION;
+     default:
          return FINISHED;
     }
             
 }
 
-double nav_code(...
+double getAngle(coord_t currPos, coord_t nextPos) {
+      return (atan((nextPos.x - currPos.x)/(nextPos.y - currPos.y)) * (180/PI));
+}
+
+double nav_code(int seg , void* data) {
+    TaskData* d = (TaskData*) data;
+    double t;
+    switch (d->needToCharge) {
+        case false:
+            // TODO : nav de la voiture normal
+            switch(seg) {
+                case 1:
+                    ttAnalogOut(4, 50);
+                    d->currPos->x = ttAnalogIn(3); // recup de la pos
+                    d->currPos->y = ttAnalogIn(4);
+                    return 2 * T_READ + 2 * T_INSTRUCTION;
+                case 2:
+                    int32_t stepX;
+                    int32_t stepY;
+                    t = getNextStep((int)d->dest->x, (int)d->dest->y,
+                                    (int)d->currPos->x, (int)d->currPos->y,
+                                    stepX, stepY);
+                    d->nextStep->x = stepX;
+                    d->nextStep->y = stepY;
+                    return 4 * T_INSTRUCTION + t;
+                case 3:
+                    ttAnalogOut(3, getAngle(*d->currPos, *d->nextStep));
+                    return T_INSTRUCTION;
+                default:
+                    return FINISHED;
+            }
+            
+
+        case true:
+            switch (seg) {
+                case 1:
+                    ttAnalogOut(4, 30); // vitesse a 30
+                    d->currPos->x = ttAnalogIn(3); // recup de la pos
+                    d->currPos->y = ttAnalogIn(4);
+                    return 2 * T_READ + 2 * T_INSTRUCTION;
+                case 2:
+                    // get the closest station and store it in data's stationPos
+                    t += getClosestStation(*d->currPos, *d->stationPos);
+                    return t;
+                case 3:
+                    int32_t stepX;
+                    int32_t stepY;
+                    t = getNextStep((int)d->stationPos->x, (int)d->stationPos->y,
+                                    (int)d->currPos->x, (int)d->currPos->y,
+                                    stepX, stepY);
+                    d->nextStep->x = stepX;
+                    d->nextStep->y = stepY;
+                    return 4 * T_INSTRUCTION + t;
+                case 4:
+                    ttAnalogOut(3, getAngle(*d->currPos, *d->nextStep));
+                    return T_INSTRUCTION;
+                default:
+                    return FINISHED;
+                    
+        }
+    }
+}
+
+double camera_code(int seg) {
+    switch (seg) {
+        case 1:
+            ttAnalogOut(2, 1);
+            return T_INSTRUCTION;
+        case default:
+            return FINISHED;
+    }
+}
+
+
+
 
 // Kernel init function    
 void init()
@@ -181,15 +239,21 @@ void init()
     
     ttSetUserData(data);
     
-    ttCreateHandler("alerte10_handler", 1, alerte10_code, data);
+    data->needToCharge = false;
+
+    ttInitKernel(prioFP);
+
+    ttCreateHandler("alerte10_handler", 1, alerte10_code, (void *)data);
     //activate battery save
-    ttCreateHandler("alerte80_handler", 1, alerte80_code, data);
+    ttCreateHandler("alerte80_handler", 1, alerte80_code, (void *)data);
     //exit charge station
 
     ttAttachTriggerHandler(1, "alerte10_handler");
     ttAttachTriggerHandler(2, "alerte80_handler");
     
-    ttCreatePeriodicTask("nav", 0, 0.1, nav_code, data);
+    ttCreatePeriodicTask("nav", 0, 0.1, nav_code, (void *)data);
+    ttCreatePeriodicTask("camera", 0, 10, camera_code, (void *)data);
+
 }
 
 // Kernel cleanup function
