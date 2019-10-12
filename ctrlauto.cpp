@@ -124,6 +124,8 @@ double getClosestStation(coord_t actualPos, coord_t &stationPos)
 
 // Data structure used for the task data
 
+char *gendest = "gendest";
+
 struct TaskData 
 {
     coord_t stationPos;
@@ -140,6 +142,7 @@ double alerte10_code(int seg, void * m_data) {
     switch(seg) {
     case 1:
         data->needToCharge = true;
+        ttNotify(gendest); // we have to notify gendest in order to go to the station
         return T_INSTRUCTION;
      default:
          return FINISHED;
@@ -152,6 +155,8 @@ double alerte80_code(int seg, void * m_data) {
     switch(seg) {
     case 1:
         data->needToCharge = false;
+        ttNotify(gendest); // we have to notify gendest in order to regenerate the next step
+                             // to the destination
         return T_INSTRUCTION;
      default:
          return FINISHED;
@@ -179,7 +184,7 @@ double dest_code(int seg, void * data) {
 
     switch (seg) {
         case 1:
-            ttWait("gendest");
+            ttWait(gendest);
             t = 0;
             d->currPos.x = ttAnalogIn(5); d->currPos.y = ttAnalogIn(6);
             int32_t stepX;
@@ -189,7 +194,9 @@ double dest_code(int seg, void * data) {
                 d->nextStep.x = d->stationPos.x;
                 d->nextStep.y = d->stationPos.y;
             } else {
-                t += gen_dest(d->currPos, d->dest);
+                // generate the destination only if we arrived there or its the first call
+                if (d->beginCycle)
+                    t += gen_dest(d->currPos, d->dest); 
                 t += getNextStep((int)d->dest.x, (int)d->dest.y,
                                 (int)d->currPos.x, (int)d->currPos.y,
                                 stepX, stepY);
@@ -208,10 +215,11 @@ double nav_code(int seg , void* data) {
 
     TaskData* d = (TaskData*) data;
     double t;
-    float deltaX, deltaY;
+    float delta;
 
     switch(seg) {
         case 1:
+            d->currPos.x = ttAnalogIn(5); d->currPos.y = ttAnalogIn(6);
             if (d->needToCharge) {
                 ttAnalogOut(4, 30);
             } else {
@@ -220,13 +228,27 @@ double nav_code(int seg , void* data) {
             return 1 * T_INSTRUCTION;
         case 2:
             if (d->beginCycle) {
-                ttNotify("gendest");
+                ttNotify(gendest);
             }
             return 2 * T_INSTRUCTION;
         case 3:
             // écriture de l'angle
             ttAnalogOut(3, getAngle(d->currPos, d->nextStep));
             return T_INSTRUCTION;
+        case 4:
+            // calcul des deltas
+            delta = sqrt(pow(d->nextStep.x - d->currPos.x, 2)
+                       + pow(d->nextStep.y - d->currPos.y, 2));
+            if (delta < 10) {
+                while (d->needToCharge) {
+                    ttAnalogOut(4,0); // vitesse a zero
+                    ttAnalogOut(1,1); // charger batterie
+                }
+                if (!d->needToCharge) {
+                    d->beginCycle = true;
+                    ttNotify(gendest);
+                }
+            }
         default:
             return FINISHED;
     }
@@ -234,7 +256,7 @@ double nav_code(int seg , void* data) {
 
 double camera_code(int seg, void * data) {
 
-    double delta;
+    float delta;
     TaskData* d = (TaskData*) data;
 
     switch (seg) {
@@ -242,7 +264,7 @@ double camera_code(int seg, void * data) {
             d->lastCamPos.x = ttAnalogIn(5);
             d->lastCamPos.y = ttAnalogIn(6);
             ttAnalogOut(2, 1);
-            return 3 * T_INSTRUCTION;
+            return 2 * T_INSTRUCTION;
         case 2:
             double done;
             done = ttAnalogIn(4);
@@ -261,9 +283,9 @@ double camera_code(int seg, void * data) {
             while (delta < 10) {
                 delta = sqrt(pow((ttAnalogIn(5) - d->lastCamPos.x), 2) 
                            + pow((ttAnalogIn(6) - d->lastCamPos.y), 2));
-                        t_compt2 += 2;
+                t_compt2 += 2;
             }
-            return t_compt2 * T_INSTRUCTION;
+            return t_compt2 * (T_INSTRUCTION + T_READ);
         default:
             return FINISHED;
     }
@@ -281,7 +303,7 @@ void init()
 
     ttInitKernel(prioFP);
 
-    ttCreateEvent("gendest");
+    ttCreateEvent(gendest);
 
     ttCreateHandler("alerte10_handler", 1, alerte10_code, (void *)data);
     ttCreateHandler("alerte80_handler", 1, alerte80_code, (void *)data);
@@ -290,9 +312,10 @@ void init()
     ttAttachTriggerHandler(2, "alerte80_handler");
     
     ttCreatePeriodicTask("nav", 0, 0.1, nav_code, (void *)data);
-    ttCreatePeriodicTask("camera", 0, 0.1, camera_code, (void *)data);
-    ttCreateJob("camera");
-    ttCreateTask("dest", 0, dest_code, (void *)data);
+    // ttCreatePeriodicTask("camera", 0, 0.1, camera_code, (void *)data);
+    ttCreateTask("dest", 10000, dest_code, (void *)data);
+    ttCreateJob("dest");
+
 
 }
 
