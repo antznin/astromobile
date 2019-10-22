@@ -16,6 +16,6 @@ mex -setup:'C:\Program Files\MATLAB\R2019a\bin\win64\mexopts\mingw64_g++.xml' C+
 %make_truetime          %pour la compilation de la librairie truetime
 ttmex ctrlauto.cpp     %pour la compilation du code du fichier c++
 
-truetime
+%truetime
 
 run('init_values.m')    %pour initialiser les valeurs du système
