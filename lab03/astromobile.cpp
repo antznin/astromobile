@@ -12,6 +12,11 @@
 #include <signal.h>
 #include <sys/syspage.h> 
 #include <sys/neutrino.h> 
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+
+
 
 #include "genMap.h"
 #include "astromobile.h"
@@ -20,12 +25,14 @@ using namespace std;
 
 int main() {
 
+	sleep(1);
 	init();
 
 	return 0;
 }
 
 void * cameraControl_worker(void * data) {
+	cout << "test" << endl;
 	return NULL; 
 }	
 void * camera_worker(void * data) {
@@ -59,38 +66,39 @@ void * display_worker(void * data) {
 void init()
 {
 	pthread_t tid[THREAD_NUM];
-	pthread_attr_t attr;
-	struct sched_param sched; 
-	struct mq_attr mqattr;
+	pthread_attr_t attrib;
+	struct sched_param mySchedParam;
+//	struct mq_attr mqattr;
 	int i; 
 
-	// création des queues
-	memset(&mqattr, 0, sizeof(mqattr));
-	mqattr.mq_maxmsg = MAX_NUM_MSG;
-	mqattr.mq_msgsize = sizeof(message) ;
-
-	mq_unlink(MQ_CAM) ;
-	if ((msgQCam = mq_open(MQ_CAM, O_RDWR|O_CREAT, S_IRUSR|S_IWUSR,
-			&mqattr)) < 0){
-		printf("msgQCreate MQ_CAM échouée!\n");
-		return;
-	}
-	mq_unlink(MQ_NAV) ;
-	if ((msgQNav = mq_open(MQ_NAV, O_RDWR|O_CREAT, S_IRUSR|S_IWUSR,
-			&mqattr)) < 0){
-		printf("msgQCreate MQ_NAV échouée!\n");
-		return;
-	}
-
-	mq_unlink(MQ_BATT) ;
-	if ((msgQBatt = mq_open(MQ_BATT, O_RDWR|O_CREAT, S_IRUSR|S_IWUSR,
-			&mqattr)) < 0){
-		printf("msgQCreate MQ_BATT échouée!\n");
-		return;
-	}
+//    création des queues
+//	memset(&mqattr, 0, sizeof(mqattr));
+//	mqattr.mq_maxmsg = MAX_NUM_MSG;
+//	mqattr.mq_msgsize = sizeof(message) ;
+//
+//	mq_unlink(MQ_CAM) ;
+//	if ((msgQCam = mq_open(MQ_CAM, O_RDWR|O_CREAT, 0664,
+//			&mqattr)) < 0){
+//		printf("msgQCreate MQ_CAM échouée!\n");
+//		cout << errno << " " << strerror(errno);
+//		return;
+//	}
+//	mq_unlink(MQ_NAV) ;
+//	if ((msgQNav = mq_open(MQ_NAV, O_RDWR|O_CREAT, S_IRUSR|S_IWUSR,
+//			&mqattr)) < 0){
+//		printf("msgQCreate MQ_NAV échouée!\n");
+//		return;
+//	}
+//
+//	mq_unlink(MQ_BATT) ;
+//	if ((msgQBatt = mq_open(MQ_BATT, O_RDWR|O_CREAT, S_IRUSR|S_IWUSR,
+//			&mqattr)) < 0){
+//		printf("msgQCreate MQ_BATT échouée!\n");
+//		return;
+//	}
 
 	// creation des threads
-	setprio(0,20);
+	//setprio(0,20);
 	pthread_attr_init (&attrib);
 	pthread_attr_setinheritsched (&attrib, PTHREAD_EXPLICIT_SCHED);
 	pthread_attr_setschedpolicy (&attrib, SCHED_FIFO);

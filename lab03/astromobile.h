@@ -14,22 +14,21 @@ void init();
 #define MSG_PRI_MED  20
 #define MSG_PRI_HIGH 30
 
-#define MQ_NAV  "MQ Navigation"
-#define MQ_CAM  "MQ Caméra"
-#define MQ_BATT "MQ Batterie"
+#define MQ_NAV  "/MQ_Navigation"
+#define MQ_CAM  "/MQ_Camera"
+#define MQ_BATT "/MQ_Batterie"
 
 struct physicsData {
 	float speed;
-	pic;
 	float battLevel;
 	float angle;
 	coord_t currPos;
-}
+};
 
 typedef enum {MSG_DATA, MSG_ALERTE} msgType;
 
 // structure de message partagé entre les tâches
-typedef struct
+typedef struct {
 	int ID;
 	msgType type;
 	unsigned int size;
