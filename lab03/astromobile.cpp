@@ -15,13 +15,14 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
-
-
+#include <math.h>
 
 #include "genMap.h"
 #include "astromobile.h"
 
 using namespace std;
+
+struct physicsData data;
 
 int main() {
 
@@ -42,7 +43,17 @@ void * battery_worker(void * data) {
 	return NULL; 
 }	
 void * speed_worker(void * data) {
-	return NULL; 
+
+	while (1) { 
+		
+		float deltaX, deltaY;
+
+		dist = 1000 * (data.speed * (0.1/3600));
+		
+	
+		sleep(0.1); // period
+	}
+	/* return NULL; */ 
 }	
 void * angle_worker(void * data) {
 	return NULL; 
@@ -65,6 +76,14 @@ void * display_worker(void * data) {
 
 void init()
 {
+
+	data.speed = 50;
+	data.angle = 0;
+	data.battLevel = 100;
+	data.currPos.x = 0;
+	data.currPos.y = 0;
+
+
 	pthread_t tid[THREAD_NUM];
 	pthread_attr_t attrib;
 	struct sched_param mySchedParam;

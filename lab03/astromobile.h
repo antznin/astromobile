@@ -7,6 +7,8 @@ void init();
 
 #define THREAD_NUM 10
 
+#define PERIOD 0.1
+
 // Maximum de message dans un queue
 #define MAX_NUM_MSG 50
 // Priorités des messages
