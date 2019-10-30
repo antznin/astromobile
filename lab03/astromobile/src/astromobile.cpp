@@ -10,8 +10,8 @@
 #include <sys/types.h> 
 #include <time.h>
 #include <signal.h>
-#include <sys/syspage.h> 
-#include <sys/neutrino.h> 
+/* #include <sys/syspage.h> */ 
+/* #include <sys/neutrino.h> */ 
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -30,10 +30,8 @@ bool takePx;
 //bool isMoving; //1 si la voiture roule et 0 sinon
 bool inCharge;
 
-
 int main() {
 
-	sleep(1);
 	init();
 
 	return 0;
@@ -56,7 +54,6 @@ void * cameraControl_worker(void * data) {
                 }
         return NULL;
 }
-
 void * camera_worker(void * data) {
         rgb_t image;
         while(1)        {
@@ -77,25 +74,72 @@ void * battery_worker(void * data) {
 	}
 	return NULL; 
 }	
-void * speed_worker(void * data) {
+
+
+/******************************************************
+* currPos_worker : met à jour la position en fonction *
+* de la vitesse et de la l'angle					  *
+******************************************************/
+void * currPos_worker(void * data) {
+
+	float deltaX, deltaY, dist;
+	cout << "test" << endl;
 
 	while (1) { 
-		
-		//float deltaX, deltaY;
 
-		//dist = 1000 * (data.speed * (0.1/3600));
-		
+		pthread_mutex_lock(&mutDataSpeed);
+		dist = 1000 * (myData.speed * (PERIOD/3600));
+		pthread_mutex_unlock(&mutDataSpeed);
+		pthread_mutex_lock(&mutDataAngle);
+		deltaX = dist * cos(myData.angle * PI / 180);
+		deltaY = dist * sin(myData.angle * PI / 180);
+		pthread_mutex_unlock(&mutDataAngle);
+		pthread_mutex_lock(&mutDataCurrPos);
+		myData.currPos.x += deltaX;	
+		myData.currPos.y += deltaY;	
+		pthread_mutex_unlock(&mutDataCurrPos);	
+
+		cout << myData.currPos.x << " " << myData.currPos.y << endl;
 	
-		sleep(0.1); // period
+		sleep(PERIOD); // period
 	}
 	/* return NULL; */ 
 }	
+
 void * angle_worker(void * data) {
 	return NULL; 
 }	
+
 void * navControl_worker(void * data) {
+
+	enum carState state = GOTO_DEST; // état initial à GOTO_DEST
+	float batt;
+
+	while(1) {
+		switch(state) {
+			case GOTO_DEST:
+				pthread_mutex_lock(&mutDataBattLevel);
+				batt = myData.battLevel;
+				pthread_mutex_unlock(&mutDataBattLevel);
+				if (batt <= 10) {
+					state = BATT_LOW;
+				} else {
+					// 
+				}
+				break;
+			case BATT_LOW:
+
+				break;
+			case CHARGING:
+
+				break;
+		}
+	}
+	
+
 	return NULL; 
 }	
+
 void * destControl_worker(void * data) {
 	return NULL; 
 }	
@@ -111,7 +155,6 @@ void * display_worker(void * data) {
 
 void init()
 {
-
 	myData.speed = 50;
 	myData.angle = 0;
 	myData.battLevel = 100;
@@ -172,10 +215,10 @@ void init()
 	if ( pthread_create(&tid[2], &attrib, battery_worker, NULL ) < 0)
 		printf("taskSpawn battery_worker failed!\n");
 
-	mySchedParam.sched_priority = 20;
+	mySchedParam.sched_priority = 1;
 	pthread_attr_setschedparam(&attrib, &mySchedParam);
-	if ( pthread_create(&tid[3], &attrib, speed_worker, NULL ) < 0)
-		printf("taskSpawn speed_worker failed!\n");
+	if ( pthread_create(&tid[3], &attrib, currPos_worker, NULL ) < 0)
+		cout << "taskSpawn currPos_worker failed!" << endl;
 
 	mySchedParam.sched_priority = 20;
 	pthread_attr_setschedparam(&attrib, &mySchedParam);
