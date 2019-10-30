@@ -30,6 +30,9 @@ bool takePx;
 //bool isMoving; //1 si la voiture roule et 0 sinon
 bool inCharge;
 
+bool lowBat;
+bool highBat;
+
 int main() {
 
 	init();
@@ -38,7 +41,7 @@ int main() {
 }
 
 void * cameraControl_worker(void * data) {
-    int delta, x, y;
+    double delta, x, y;
         while(1)        {
                 pthread_mutex_lock(&mutDataCurrPos);
                 x = myData.currPos.x;
@@ -48,7 +51,9 @@ void * cameraControl_worker(void * data) {
                         pthread_mutex_lock(&mutDataCurrPos);
                         delta = sqrt(pow((myData.currPos.x - x), 2) + pow((myData.currPos.y - y), 2));
                         pthread_mutex_unlock(&mutDataCurrPos);
+                        //cout << delta << endl;
                 }
+                //cout<< "out : " << delta << endl;
                 takePx = true;
                 delta = 0;
                 }
@@ -58,9 +63,12 @@ void * camera_worker(void * data) {
         rgb_t image;
         while(1)        {
                 if (takePx) {
-                        image = pm.takePhoto(myData.currPos);
-                		pthread_mutex_unlock(&mutDataCurrPos);
-                        takePx = false;        }
+                	pthread_mutex_lock(&mutDataCurrPos);
+                    image = pm.takePhoto(myData.currPos);
+                	pthread_mutex_unlock(&mutDataCurrPos);
+                	//cout << "photo taken" << endl;
+                    takePx = false;        }
+        sleep(PERIOD);
         }
         return NULL;
 }
@@ -69,7 +77,6 @@ void * battery_worker(void * data) {
 
 	float speed_local;
 
-	cout << "battery" << endl;
 
 	while(1)	{
 		if (inCharge)	{
@@ -77,12 +84,13 @@ void * battery_worker(void * data) {
 			myData.battLevel += COEFF_CHARGE;
 			pthread_mutex_unlock(&mutDataBattLevel);
 		}
-		pthread_mutex_lock(&mutDataBattLevel);
 		pthread_mutex_lock(&mutDataSpeed);
-		myData.battLevel -= (COEFF_DECHARGE*myData.speed + CONST_DECHARGE);
+		speed_local = myData.speed;
 		pthread_mutex_unlock(&mutDataSpeed);
+		pthread_mutex_lock(&mutDataBattLevel);
+		myData.battLevel -= (COEFF_DECHARGE*speed_local + CONST_DECHARGE);
 		pthread_mutex_unlock(&mutDataBattLevel);
-		cout << myData.battLevel << endl;
+		//cout << myData.battLevel << endl;
 
 		sleep(1);
 	}
@@ -157,18 +165,68 @@ void * destControl_worker(void * data) {
 	return NULL; 
 }	
 void * battLow_worker(void * data) {
+	float bat;
+	while (1)	{
+		pthread_mutex_lock(&mutDataBattLevel);
+		bat = myData.battLevel;
+		pthread_mutex_unlock(&mutDataBattLevel);
+		if (bat <= 10)
+			lowBat = true;
+		sleep(PERIOD);	}
 	return NULL; 
 }	
 void * battHigh_worker(void * data) {
+	float bat;
+	while (1)	{
+		pthread_mutex_lock(&mutDataBattLevel);
+		bat = myData.battLevel;
+		pthread_mutex_unlock(&mutDataBattLevel);
+		if (bat >= 80)
+			highBat = true;
+		sleep(PERIOD);	}
 	return NULL; 
 }	
+
 void * display_worker(void * data) {
+	while (1)	{
+		cout << "*******************************************" << endl;
+
+		float bat;
+		pthread_mutex_lock(&mutDataBattLevel);
+		bat = myData.battLevel;
+		pthread_mutex_unlock(&mutDataBattLevel);
+		cout << "battLevel: " << bat << "%." << endl;
+
+		float speed_local;
+		pthread_mutex_lock(&mutDataSpeed);
+		speed_local = myData.speed;
+		pthread_mutex_unlock(&mutDataSpeed);
+		cout << "speed: " << speed_local << "kh/h" << endl;
+
+		double x, y;
+        pthread_mutex_lock(&mutDataCurrPos);
+        x = myData.currPos.x;
+        y = myData.currPos.y;
+        pthread_mutex_unlock(&mutDataCurrPos);
+        cout << "currPos.x: " << x << "   " << "currPos.y: " << y << endl;
+
+		float angle_local;
+		pthread_mutex_lock(&mutDataAngle);
+		angle_local = myData.angle;
+		pthread_mutex_unlock(&mutDataAngle);
+		cout << "angle: " << angle_local << "°" << endl;
+
+
+		cout << "*******************************************" << endl;
+
+		sleep(3);
+	}
 	return NULL; 
 }	
 
 void init()
 {
-	myData.speed = 50;
+	myData.speed = 30;
 	myData.angle = 90;
 	myData.battLevel = 100;
 	myData.currPos.x = 0;
