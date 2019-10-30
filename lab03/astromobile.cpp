@@ -10,8 +10,8 @@
 #include <sys/types.h> 
 #include <time.h>
 #include <signal.h>
-#include <sys/syspage.h> 
-#include <sys/neutrino.h> 
+/* #include <sys/syspage.h> */ 
+/* #include <sys/neutrino.h> */ 
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -22,18 +22,16 @@
 
 using namespace std;
 
-struct physicsData data;
+struct physicsData my_data;
 
 int main() {
 
-	sleep(1);
 	init();
 
 	return 0;
 }
 
 void * cameraControl_worker(void * data) {
-	cout << "test" << endl;
 	return NULL; 
 }	
 void * camera_worker(void * data) {
@@ -42,16 +40,34 @@ void * camera_worker(void * data) {
 void * battery_worker(void * data) {
 	return NULL; 
 }	
-void * speed_worker(void * data) {
+
+
+/******************************************************
+* currPos_worker : met à jour la position en fonction *
+* de la vitesse et de la l'angle					  *
+******************************************************/
+void * currPos_worker(void * data) {
+
+	float deltaX, deltaY, dist;
+	cout << "test" << endl;
 
 	while (1) { 
-		
-		float deltaX, deltaY;
 
-		dist = 1000 * (data.speed * (0.1/3600));
-		
+		pthread_mutex_lock(&mutDataSpeed);
+		dist = 1000 * (my_data.speed * (PERIOD/3600));
+		pthread_mutex_unlock(&mutDataSpeed);
+		pthread_mutex_lock(&mutDataAngle);
+		deltaX = dist * cos(my_data.angle * PI / 180);
+		deltaY = dist * sin(my_data.angle * PI / 180);
+		pthread_mutex_unlock(&mutDataAngle);
+		pthread_mutex_lock(&mutDataCurrPos);
+		my_data.currPos.x += deltaX;	
+		my_data.currPos.y += deltaY;	
+		pthread_mutex_unlock(&mutDataCurrPos);	
+
+		cout << my_data.currPos.x << " " << my_data.currPos.y << endl;
 	
-		sleep(0.1); // period
+		sleep(PERIOD); // period
 	}
 	/* return NULL; */ 
 }	
@@ -77,11 +93,12 @@ void * display_worker(void * data) {
 void init()
 {
 
-	data.speed = 50;
-	data.angle = 0;
-	data.battLevel = 100;
-	data.currPos.x = 0;
-	data.currPos.y = 0;
+
+	my_data.speed = 50;
+	my_data.angle = 0;
+	my_data.battLevel = 100;
+	my_data.currPos.x = 0;
+	my_data.currPos.y = 0;
 
 
 	pthread_t tid[THREAD_NUM];
@@ -137,10 +154,10 @@ void init()
 	if ( pthread_create(&tid[2], &attrib, battery_worker, NULL ) < 0)
 		printf("taskSpawn battery_worker failed!\n");
 
-	mySchedParam.sched_priority = 20;
+	mySchedParam.sched_priority = 1;
 	pthread_attr_setschedparam(&attrib, &mySchedParam);
-	if ( pthread_create(&tid[3], &attrib, speed_worker, NULL ) < 0)
-		printf("taskSpawn speed_worker failed!\n");
+	if ( pthread_create(&tid[3], &attrib, currPos_worker, NULL ) < 0)
+		cout << "taskSpawn currPos_worker failed!" << endl;
 
 	mySchedParam.sched_priority = 20;
 	pthread_attr_setschedparam(&attrib, &mySchedParam);

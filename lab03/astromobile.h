@@ -9,6 +9,8 @@ void init();
 
 #define PERIOD 0.1
 
+#define PI 3.1415
+
 // Maximum de message dans un queue
 #define MAX_NUM_MSG 50
 // Priorités des messages
@@ -37,5 +39,11 @@ typedef struct {
 } message;
 
 mqd_t msgQCam, msgQNav, msgQBatt;
+
+// Mutex pour protéger
+pthread_mutex_t mutDataSpeed     = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutDataBattLevel = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutDataAngle     = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutDataCurrPos   = PTHREAD_MUTEX_INITIALIZER;
 
 #endif /* ifndef ASTROMOBILE_H */
