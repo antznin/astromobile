@@ -24,10 +24,6 @@ void init();
 #define CONST_DECHARGE 1/(60*10)		//la batterie perd constament 1%
 //toutes les 10mn indépendamment de la vitesse
 
-#define MQ_NAV  "/MQ_Navigation"
-#define MQ_CAM  "/MQ_Camera"
-#define MQ_BATT "/MQ_Batterie"
-
 struct physicsData {
 	float speed;
 	float battLevel;
@@ -46,8 +42,6 @@ typedef struct {
 	msgType type;
 	unsigned int size;
 } message;
-
-mqd_t msgQCam, msgQNav, msgQBatt;
 
 // Mutex pour protéger
 pthread_mutex_t mutDataSpeed     = PTHREAD_MUTEX_INITIALIZER;
