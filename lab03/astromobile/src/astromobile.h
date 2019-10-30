@@ -19,7 +19,7 @@ void init();
 #define MSG_PRI_HIGH 30
 
 #define COEFF_CHARGE 1/60		//la batterie gagne 1% par minute en charge
-#define COEFF_DECHARGE 1/(60*30)		//la batterie perd coeff*vitesse par
+#define COEFF_DECHARGE 0.0111 //1/(60*30)		//la batterie perd coeff*vitesse par
 //minute en décharge, donc 1% perdu par minute quand elle roule a 30
 #define CONST_DECHARGE 1/(60*10)		//la batterie perd constament 1%
 //toutes les 10mn indépendamment de la vitesse
