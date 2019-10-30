@@ -9,6 +9,8 @@ void init();
 
 #define PERIOD 0.1
 
+#define PI 3.1415
+
 // Maximum de message dans un queue
 #define MAX_NUM_MSG 50
 // Priorités des messages
@@ -33,6 +35,9 @@ struct physicsData {
 	coord_t currPos;
 };
 
+// État de la machine pour la machine à états
+enum carState {GOTO_DEST, BATT_LOW, CHARGING};
+
 typedef enum {MSG_DATA, MSG_ALERTE} msgType;
 
 // structure de message partagé entre les tâches
@@ -43,5 +48,11 @@ typedef struct {
 } message;
 
 mqd_t msgQCam, msgQNav, msgQBatt;
+
+// Mutex pour protéger
+pthread_mutex_t mutDataSpeed     = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutDataBattLevel = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutDataAngle     = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutDataCurrPos   = PTHREAD_MUTEX_INITIALIZER;
 
 #endif /* ifndef ASTROMOBILE_H */
