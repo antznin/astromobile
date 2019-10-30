@@ -29,6 +29,9 @@ struct physicsData {
 	coord_t currPos;
 };
 
+// État de la machine pour la machine à états
+enum carState {GOTO_DEST, BATT_LOW, CHARGING};
+
 typedef enum {MSG_DATA, MSG_ALERTE} msgType;
 
 // structure de message partagé entre les tâches

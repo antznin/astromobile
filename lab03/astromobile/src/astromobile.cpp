@@ -22,7 +22,7 @@
 
 using namespace std;
 
-struct physicsData my_data;
+struct physicsData myData;
 
 int main() {
 
@@ -54,29 +54,58 @@ void * currPos_worker(void * data) {
 	while (1) { 
 
 		pthread_mutex_lock(&mutDataSpeed);
-		dist = 1000 * (my_data.speed * (PERIOD/3600));
+		dist = 1000 * (myData.speed * (PERIOD/3600));
 		pthread_mutex_unlock(&mutDataSpeed);
 		pthread_mutex_lock(&mutDataAngle);
-		deltaX = dist * cos(my_data.angle * PI / 180);
-		deltaY = dist * sin(my_data.angle * PI / 180);
+		deltaX = dist * cos(myData.angle * PI / 180);
+		deltaY = dist * sin(myData.angle * PI / 180);
 		pthread_mutex_unlock(&mutDataAngle);
 		pthread_mutex_lock(&mutDataCurrPos);
-		my_data.currPos.x += deltaX;	
-		my_data.currPos.y += deltaY;	
+		myData.currPos.x += deltaX;	
+		myData.currPos.y += deltaY;	
 		pthread_mutex_unlock(&mutDataCurrPos);	
 
-		cout << my_data.currPos.x << " " << my_data.currPos.y << endl;
+		cout << myData.currPos.x << " " << myData.currPos.y << endl;
 	
 		sleep(PERIOD); // period
 	}
 	/* return NULL; */ 
 }	
+
 void * angle_worker(void * data) {
 	return NULL; 
 }	
+
 void * navControl_worker(void * data) {
+
+	enum carState state = GOTO_DEST; // état initial à GOTO_DEST
+	float batt;
+
+	while(1) {
+		switch(state) {
+			case GOTO_DEST:
+				pthread_mutex_lock(&mutDataBattLevel);
+				batt = myData.battLevel;
+				pthread_mutex_unlock(&mutDataBattLevel);
+				if (batt <= 10) {
+					state = BATT_LOW;
+				} else {
+					// 
+				}
+				break;
+			case BATT_LOW:
+
+				break;
+			case CHARGING:
+
+				break;
+		}
+	}
+	
+
 	return NULL; 
 }	
+
 void * destControl_worker(void * data) {
 	return NULL; 
 }	
@@ -94,11 +123,11 @@ void init()
 {
 
 
-	my_data.speed = 50;
-	my_data.angle = 0;
-	my_data.battLevel = 100;
-	my_data.currPos.x = 0;
-	my_data.currPos.y = 0;
+	myData.speed = 50;
+	myData.angle = 0;
+	myData.battLevel = 100;
+	myData.currPos.x = 0;
+	myData.currPos.y = 0;
 
 
 	pthread_t tid[THREAD_NUM];
