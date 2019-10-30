@@ -22,13 +22,16 @@
 
 using namespace std;
 
-struct physicsData myData;
-
 PathMap pm;
 
+struct physicsData myData;
+
+coord_t nextStep;
+coord_t dest;
+
 bool takePx;
-//bool isMoving; //1 si la voiture roule et 0 sinon
 bool inCharge;
+bool destReached;
 
 bool lowBat;
 bool highBat;
@@ -131,37 +134,107 @@ void * angle_worker(void * data) {
 	return NULL; 
 }	
 
+bool nextStepReached(coord_t currPos, coord_t nextStep) {
+	return (sqrt(pow((nextStep.x - currPos.x),2) + pow((nextStep.y - currPos.y),2)) <= 10);
+}
+
+double getAngle(coord_t currPos, coord_t nextPos) {
+    if (nextPos.y - currPos.y > 0) {
+        return (atan((nextPos.x - currPos.x)/(nextPos.y - currPos.y)) * (180/PI));
+    } else if (nextPos.y - currPos.y < 0) {
+        return (atan((nextPos.x - currPos.x)/(nextPos.y - currPos.y)) * (180/PI) + 180);
+    } else {
+        if (nextPos.x - currPos.x > 0) {
+            return 90;
+        } else {
+            return -90;
+        }
+    }
+}
+
 void * navControl_worker(void * data) {
 
 	enum carState state = GOTO_DEST; // état initial à GOTO_DEST
 	float batt;
+	coord_t currPos_local;
+	coord_t stationPos_local;
 
 	while(1) {
+		pthread_mutex_lock(&mutDataCurrPos);
+		currPos_local = myData.currPos;
+		pthread_mutex_unlock(&mutDataCurrPos);
 		switch(state) {
 			case GOTO_DEST:
 				pthread_mutex_lock(&mutDataBattLevel);
 				batt = myData.battLevel;
 				pthread_mutex_unlock(&mutDataBattLevel);
+				pthread_mutex_lock(&mutDataSpeed);
+				myData.speed = 50;
+				pthread_mutex_unlock(&mutDataSpeed);
 				if (batt <= 10) {
 					state = BATT_LOW;
 				} else {
-					// 
+					if (destReached) {
+						// Destination atteinte donc on en génère une nouvelle
+						pm.genDest(currPos_local, dest);
+						destReached = false;
+					} else {	
+						// Étape atteinte ?
+						if (nextStepReached(currPos_local, nextStep)) {
+							// On génère la prochaine étape
+							pm.genWp(currPos_local, dest, nextStep);
+						} else {
+							// Sinon on met à jour l'angle
+							pthread_mutex_lock(&mutDataAngle);
+							myData.angle = getAngle(currPos_local, nextStep);
+							pthread_mutex_unlock(&mutDataAngle);
+						}
+					}
 				}
 				break;
 			case BATT_LOW:
-
+				pthread_mutex_lock(&mutDataSpeed);
+				myData.speed = 30;
+				pthread_mutex_unlock(&mutDataSpeed);
+				pm.getClosestStation(currPos_local, stationPos);
+				pthread_mutex_lock(&mutDataAngle);
+				myData.angle = getAngle(currPos_local, stationPos);
+				pthread_mutex_unlock(&mutDataAngle);
+				if nextStepReached(currPos_local, stationPos)
+					state = CHARGING;
 				break;
 			case CHARGING:
-
+				pthread_mutex_lock(&mutDataSpeed);
+				myData.speed = 0;
+				pthread_mutex_unlock(&mutDataSpeed);
+				inCharge = true;
+				if (highBat) {
+					// On genere une nouvelle etape a partir de la station
+					// avant de retourner à l'état GOTO_DEST
+					pm.genWp(currPos_local, dest, nextStep);
+					inCharge = false;
+					state = GOTO_DEST;
+				}
 				break;
 		}
+	sleep(0.1);
 	}
-	
-
 	return NULL; 
-}	
+}
 
+/********************************************************************
+* Ce thread determine quand la voiture est arrivée à la destination *
+********************************************************************/
 void * destControl_worker(void * data) {
+	coord_t currPos_local;
+	while (1) {
+		pthread_mutex_lock(&mutDataCurrPos);
+		currPos_local = myData.currPos;
+		pthread_mutex_unlock(&mutDataCurrPos);	
+		if nextStepReached(currPos_local, dest)
+			destReached = true;
+		sleep(0.1);
+	}
 	return NULL; 
 }	
 void * battLow_worker(void * data) {
@@ -232,37 +305,13 @@ void init()
 	myData.currPos.x = 0;
 	myData.currPos.y = 0;
 
+	destReached = true;
+
 	pthread_t tid[THREAD_NUM];
 	pthread_attr_t attrib;
 	struct sched_param mySchedParam;
 //	struct mq_attr mqattr;
 	int i; 
-
-//    création des queues
-//	memset(&mqattr, 0, sizeof(mqattr));
-//	mqattr.mq_maxmsg = MAX_NUM_MSG;
-//	mqattr.mq_msgsize = sizeof(message) ;
-//
-//	mq_unlink(MQ_CAM) ;
-//	if ((msgQCam = mq_open(MQ_CAM, O_RDWR|O_CREAT, 0664,
-//			&mqattr)) < 0){
-//		printf("msgQCreate MQ_CAM échouée!\n");
-//		cout << errno << " " << strerror(errno);
-//		return;
-//	}
-//	mq_unlink(MQ_NAV) ;
-//	if ((msgQNav = mq_open(MQ_NAV, O_RDWR|O_CREAT, S_IRUSR|S_IWUSR,
-//			&mqattr)) < 0){
-//		printf("msgQCreate MQ_NAV échouée!\n");
-//		return;
-//	}
-//
-//	mq_unlink(MQ_BATT) ;
-//	if ((msgQBatt = mq_open(MQ_BATT, O_RDWR|O_CREAT, S_IRUSR|S_IWUSR,
-//			&mqattr)) < 0){
-//		printf("msgQCreate MQ_BATT échouée!\n");
-//		return;
-//	}
 
 	// creation des threads
 	//setprio(0,20);
