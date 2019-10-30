@@ -22,7 +22,14 @@
 
 using namespace std;
 
-struct physicsData data;
+struct physicsData myData;
+
+PathMap pm;
+
+bool takePx;
+//bool isMoving; //1 si la voiture roule et 0 sinon
+bool inCharge;
+
 
 int main() {
 
@@ -33,22 +40,50 @@ int main() {
 }
 
 void * cameraControl_worker(void * data) {
-	cout << "test" << endl;
-	return NULL; 
-}	
+    int delta, x, y;
+        while(1)        {
+                pthread_mutex_lock(&mut1);
+                x = myData.currPos.x;
+                y = myData.currPos.y;
+                pthread_mutex_unlock(&mut1);
+                while (delta < 10) {
+                        pthread_mutex_lock(&mut1);
+                        delta = sqrt(pow((myData.currPos.x - x), 2) + pow((myData.currPos.y - y), 2));
+                        pthread_mutex_unlock(&mut1);
+                }
+                takePx = true;
+                delta = 0;
+                }
+        return NULL;
+}
+
 void * camera_worker(void * data) {
-	return NULL; 
-}	
+        rgb_t image;
+        while(1)        {
+                if (takePx) {
+                        //image = pm.takePhoto(myData.currPos);
+                        image = pm.takePhoto(myData.currPos);
+                        takePx = false;        }
+        }
+        return NULL;
+}
+
 void * battery_worker(void * data) {
+	while(1)	{
+		if (inCharge)
+			myData.battLevel += COEFF_CHARGE;
+		myData.battLevel -= COEFF_DECHARGE*myData.speed + CONST_DECHARGE;
+	sleep(1);
+	}
 	return NULL; 
 }	
 void * speed_worker(void * data) {
 
 	while (1) { 
 		
-		float deltaX, deltaY;
+		//float deltaX, deltaY;
 
-		dist = 1000 * (data.speed * (0.1/3600));
+		//dist = 1000 * (data.speed * (0.1/3600));
 		
 	
 		sleep(0.1); // period
@@ -77,11 +112,11 @@ void * display_worker(void * data) {
 void init()
 {
 
-	data.speed = 50;
-	data.angle = 0;
-	data.battLevel = 100;
-	data.currPos.x = 0;
-	data.currPos.y = 0;
+	myData.speed = 50;
+	myData.angle = 0;
+	myData.battLevel = 100;
+	myData.currPos.x = 0;
+	myData.currPos.y = 0;
 
 
 	pthread_t tid[THREAD_NUM];
