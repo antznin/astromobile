@@ -16,6 +16,8 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <math.h>
+#include <iomanip>  // needed to use manipulators with parameters (precision, width)
+#include <cmath>
 
 #include "genMap.h"
 #include "astromobile.h"
@@ -26,8 +28,11 @@ PathMap pm;
 
 struct physicsData myData;
 
+enum carState state = GOTO_DEST; // état initial à GOTO_DEST
+
 coord_t nextStep;
 coord_t dest;
+coord_t stationPos;
 
 bool takePx;
 bool inCharge;
@@ -54,9 +59,7 @@ void * cameraControl_worker(void * data) {
                         pthread_mutex_lock(&mutDataCurrPos);
                         delta = sqrt(pow((myData.currPos.x - x), 2) + pow((myData.currPos.y - y), 2));
                         pthread_mutex_unlock(&mutDataCurrPos);
-                        //cout << delta << endl;
                 }
-                //cout<< "out : " << delta << endl;
                 takePx = true;
                 delta = 0;
                 }
@@ -140,9 +143,9 @@ bool nextStepReached(coord_t currPos, coord_t nextStep) {
 
 double getAngle(coord_t currPos, coord_t nextPos) {
     if (nextPos.y - currPos.y > 0) {
-        return (atan((nextPos.x - currPos.x)/(nextPos.y - currPos.y)) * (180/PI));
+        return 90 - (atan((nextPos.x - currPos.x)/(nextPos.y - currPos.y)) * (180/PI));
     } else if (nextPos.y - currPos.y < 0) {
-        return (atan((nextPos.x - currPos.x)/(nextPos.y - currPos.y)) * (180/PI) + 180);
+        return 90 - (atan((nextPos.x - currPos.x)/(nextPos.y - currPos.y)) * (180/PI) + 180);
     } else {
         if (nextPos.x - currPos.x > 0) {
             return 90;
@@ -154,10 +157,7 @@ double getAngle(coord_t currPos, coord_t nextPos) {
 
 void * navControl_worker(void * data) {
 
-	enum carState state = GOTO_DEST; // état initial à GOTO_DEST
-	float batt;
 	coord_t currPos_local;
-	coord_t stationPos_local;
 
 	while(1) {
 		pthread_mutex_lock(&mutDataCurrPos);
@@ -165,23 +165,23 @@ void * navControl_worker(void * data) {
 		pthread_mutex_unlock(&mutDataCurrPos);
 		switch(state) {
 			case GOTO_DEST:
-				pthread_mutex_lock(&mutDataBattLevel);
-				batt = myData.battLevel;
-				pthread_mutex_unlock(&mutDataBattLevel);
 				pthread_mutex_lock(&mutDataSpeed);
 				myData.speed = 50;
 				pthread_mutex_unlock(&mutDataSpeed);
-				if (batt <= 10) {
-					state = BATT_LOW;
+				if (lowBat) {
+					state = PRE_BATT_LOW;
 				} else {
 					if (destReached) {
 						// Destination atteinte donc on en génère une nouvelle
+						cout << "INFO : Destination reached" << endl;
 						pm.genDest(currPos_local, dest);
+						pm.genWp(currPos_local, dest, nextStep);
 						destReached = false;
 					} else {	
 						// Étape atteinte ?
 						if (nextStepReached(currPos_local, nextStep)) {
 							// On génère la prochaine étape
+							cout << "INFO : Step reached" << endl;
 							pm.genWp(currPos_local, dest, nextStep);
 						} else {
 							// Sinon on met à jour l'angle
@@ -192,15 +192,18 @@ void * navControl_worker(void * data) {
 					}
 				}
 				break;
-			case BATT_LOW:
+			case PRE_BATT_LOW:
 				pthread_mutex_lock(&mutDataSpeed);
 				myData.speed = 30;
 				pthread_mutex_unlock(&mutDataSpeed);
 				pm.getClosestStation(currPos_local, stationPos);
+				state = BATT_LOW;
+				break;
+			case BATT_LOW:
 				pthread_mutex_lock(&mutDataAngle);
 				myData.angle = getAngle(currPos_local, stationPos);
 				pthread_mutex_unlock(&mutDataAngle);
-				if nextStepReached(currPos_local, stationPos)
+				if (nextStepReached(currPos_local, stationPos))
 					state = CHARGING;
 				break;
 			case CHARGING:
@@ -231,7 +234,7 @@ void * destControl_worker(void * data) {
 		pthread_mutex_lock(&mutDataCurrPos);
 		currPos_local = myData.currPos;
 		pthread_mutex_unlock(&mutDataCurrPos);	
-		if nextStepReached(currPos_local, dest)
+		if (nextStepReached(currPos_local, dest))
 			destReached = true;
 		sleep(0.1);
 	}
@@ -243,8 +246,10 @@ void * battLow_worker(void * data) {
 		pthread_mutex_lock(&mutDataBattLevel);
 		bat = myData.battLevel;
 		pthread_mutex_unlock(&mutDataBattLevel);
-		if (bat <= 10)
+		if (bat <= 10 && !inCharge)
 			lowBat = true;
+		else
+			lowBat = false;
 		sleep(PERIOD);	}
 	return NULL; 
 }	
@@ -254,34 +259,40 @@ void * battHigh_worker(void * data) {
 		pthread_mutex_lock(&mutDataBattLevel);
 		bat = myData.battLevel;
 		pthread_mutex_unlock(&mutDataBattLevel);
-		if (bat >= 80)
+		if (bat >= 80 && inCharge)
 			highBat = true;
+		else
+			highBat = false;
 		sleep(PERIOD);	}
 	return NULL; 
 }	
 
+char * getCarState(enum carState state) {
+	switch (state) {
+	  case GOTO_DEST: return (char *)"GOTO_DEST";
+	  case PRE_BATT_LOW: return (char *)"PRE_BATT_LOW";
+	  case BATT_LOW: return (char *)"BATT_LOW";
+	  case CHARGING: return (char *)"CHARGING";
+	  default: return (char *)"UNKNOWN";
+   }
+}
+
 void * display_worker(void * data) {
 	while (1)	{
-		cout << "*******************************************" << endl;
+
+		cout << "******************DISPLAY******************" << endl;
 
 		float bat;
 		pthread_mutex_lock(&mutDataBattLevel);
 		bat = myData.battLevel;
 		pthread_mutex_unlock(&mutDataBattLevel);
-		cout << "battLevel: " << bat << "%." << endl;
+		cout << "battLevel: " << bat << "%." <<  endl;
 
 		float speed_local;
 		pthread_mutex_lock(&mutDataSpeed);
 		speed_local = myData.speed;
 		pthread_mutex_unlock(&mutDataSpeed);
-		cout << "speed: " << speed_local << "kh/h" << endl;
-
-		double x, y;
-        pthread_mutex_lock(&mutDataCurrPos);
-        x = myData.currPos.x;
-        y = myData.currPos.y;
-        pthread_mutex_unlock(&mutDataCurrPos);
-        cout << "currPos.x: " << x << "   " << "currPos.y: " << y << endl;
+		cout << "speed: " << speed_local << "km/h        carState: " << getCarState(state) << endl;
 
 		float angle_local;
 		pthread_mutex_lock(&mutDataAngle);
@@ -289,6 +300,16 @@ void * display_worker(void * data) {
 		pthread_mutex_unlock(&mutDataAngle);
 		cout << "angle: " << angle_local << "°" << endl;
 
+		double x, y;
+		pthread_mutex_lock(&mutDataCurrPos);
+		x = myData.currPos.x;
+		y = myData.currPos.y;
+		pthread_mutex_unlock(&mutDataCurrPos);
+		cout << " currPos.x: " << setw(9) << x            << "  currPos.y: " << y << endl;
+
+		cout << "nextStep.x: " << setw(9) << nextStep.x   << " nextStep.y: " << nextStep.y << endl;
+		cout << "    dest.x: " << setw(9) << dest.x       << "     dest.y: " << dest.y << endl;
+		cout << " station.x: " << setw(9) << stationPos.x << "  station.y: " << stationPos.y << endl;
 
 		cout << "*******************************************" << endl;
 
@@ -301,11 +322,12 @@ void init()
 {
 	myData.speed = 30;
 	myData.angle = 90;
-	myData.battLevel = 100;
+	myData.battLevel = 13;
 	myData.currPos.x = 0;
 	myData.currPos.y = 0;
 
 	destReached = true;
+	stationPos.x = 0; stationPos.y = 0;
 
 	pthread_t tid[THREAD_NUM];
 	pthread_attr_t attrib;
@@ -369,6 +391,11 @@ void init()
 	pthread_attr_setschedparam(&attrib, &mySchedParam);
 	if ( pthread_create(&tid[9], NULL, display_worker, NULL ) < 0)
 		printf("taskSpawn display_worker failed!\n");
+
+	sleep(30);
+	pm.dumpImage("./map.bmp");
+	cout << "test" << endl;
+//	exit(0);
 
 	// join des threads
 	for (i = 0; i < 10; ++i) {

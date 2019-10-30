@@ -9,7 +9,7 @@ void init();
 
 #define PERIOD 0.1
 
-#define PI 3.1415
+#define PI 3.14159265359
 
 // Maximum de message dans un queue
 #define MAX_NUM_MSG 50
@@ -18,21 +18,22 @@ void init();
 #define MSG_PRI_MED  20
 #define MSG_PRI_HIGH 30
 
-#define COEFF_CHARGE 0.01666	//1/60		//la batterie gagne 1% par minute en charge
-#define COEFF_DECHARGE 0.0111 //1/(60*30)		//la batterie perd coeff*vitesse par
+#define COEFF_CHARGE 5	//1/60		//la batterie gagne 1% par minute en charge
+//#define COEFF_DECHARGE 0.00555 //1/(60*30)		//la batterie perd coeff*vitesse par
 //minute en décharge, donc 1% perdu par minute quand elle roule a 30
+#define COEFF_DECHARGE 0.05
 #define CONST_DECHARGE 0.001666	//1/(60*10)		//la batterie perd constament 1%
 //toutes les 10mn indépendamment de la vitesse
 
 struct physicsData {
 	float speed;
 	float battLevel;
-	float angle;
+	double angle;
 	coord_t currPos;
 };
 
 // État de la machine pour la machine à états
-enum carState {GOTO_DEST, BATT_LOW, CHARGING};
+enum carState {GOTO_DEST, PRE_BATT_LOW, BATT_LOW, CHARGING};
 
 typedef enum {MSG_DATA, MSG_ALERTE} msgType;
 
