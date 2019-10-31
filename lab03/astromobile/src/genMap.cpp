@@ -31,6 +31,7 @@ void PathMap::getNextStep(int32_t destX, int32_t destY,
     {
         stepX = destX;
         stepY = destY;
+        return;
     }
 
     float alpha = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
@@ -390,8 +391,8 @@ void PathMap::genPx(int32_t coordX, int32_t coordY)
 
 rgb_t PathMap::takePhoto(coord_t position)
 {
-	int32_t x = (int32_t) position.x;
-	int32_t y = (int32_t) position.y;
+	int32_t x = (int32_t) position.x / PX_TO_M;
+	int32_t y = (int32_t) position.y / PX_TO_M;
 
 	for(int32_t i = 0; i < 25; ++i)
 	{
