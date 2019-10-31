@@ -34,6 +34,8 @@ struct physicsData myData;
 enum carState state = GOTO_DEST; // état initial à GOTO_DEST
 enum speeds speedState;
 
+double orderedAngle;
+
 coord_t nextStep;
 coord_t dest;
 coord_t stationPos;
@@ -168,6 +170,24 @@ void * battery_worker(void * data) {
 	return NULL; 
 }	
 
+/*************************************************************
+* Thread representant la partie continue qui modifie l'angle *
+* Pas forcement necessaire dans le programme mais c'est une  *
+* representation plus correcte du reel                       *
+*************************************************************/
+void * angle_worker(void * data) {
+	while (1) {
+		pthread_mutex_lock(&mutDataAngle);
+		myData.angle = orderedAngle;
+		pthread_mutex_unlock(&mutDataAngle);
+		sleep(PERIOD);
+	}
+}
+
+/*************************************************************
+* Thread representant la partie continue qui modifie la      *
+* vitesse                                                   *
+*************************************************************/
 void * speed_worker(void * data) {
 	while (1) {
 		switch (speedState) {
@@ -194,10 +214,6 @@ void * speed_worker(void * data) {
 		}
 		sleep(PERIOD);
 	}
-}
-
-void * speed_worker(void * data) {
-
 }
 
 /******************************************************
@@ -274,9 +290,7 @@ void * navControl_worker(void * data) {
 							pm.genWp(currPos_local, dest, nextStep);
 						} else {
 							// Sinon on met à jour l'angle
-							pthread_mutex_lock(&mutDataAngle);
-							myData.angle = getAngle(currPos_local, nextStep);
-							pthread_mutex_unlock(&mutDataAngle);
+							orderedAngle = getAngle(currPos_local, nextStep);
 						}
 					}
 				}
@@ -287,9 +301,7 @@ void * navControl_worker(void * data) {
 				state = BATT_LOW;
 				break;
 			case BATT_LOW:
-				pthread_mutex_lock(&mutDataAngle);
-				myData.angle = getAngle(currPos_local, stationPos);
-				pthread_mutex_unlock(&mutDataAngle);
+				orderedAngle = getAngle(currPos_local, stationPos);
 				if (nextStepReached(currPos_local, stationPos))
 					state = CHARGING;
 				break;
@@ -414,17 +426,18 @@ void * display_worker(void * data) {
 void init()
 {
 	// Valeurs initiales
-	myData.speed     = 30;
-	myData.angle     = 90;
+	speedState       = VIT0;
+	orderedAngle 	 = 0; 
 	myData.battLevel = 13;
 	myData.currPos.x = 0;
 	myData.currPos.y = 0;
-	destReached = true;
-	stationPos.x = 0; stationPos.y = 0;
-	nb_stepReached = 0;
-	nb_destReached = 0;
+	destReached      = true; // pour generer un destination initiale
+	stationPos.x     = 0;
+	stationPos.y     = 0;
+	nb_stepReached   = 0;
+	nb_destReached   = 0;
 
-	/* Initialize the semaphore */
+	/* Initialize the semaphores */
 	if(0 != sem_init(&taskCamera_sync, 0, 0)) 
 		printf("Could not init semaphore: %d\n", errno);
 	
@@ -470,7 +483,6 @@ void init()
 	 if ( pthread_create(&tid[4], NULL, navControl_worker, NULL ) < 0)
 		 printf("taskSpawn navControl_worker failed!\n");
 
-
 	mySchedParam.sched_priority = 20;
 	pthread_attr_setschedparam(&attrib, &mySchedParam);
 	if ( pthread_create(&tid[5], NULL, destControl_worker, NULL ) < 0)
@@ -489,6 +501,16 @@ void init()
 	mySchedParam.sched_priority = 20;
 	pthread_attr_setschedparam(&attrib, &mySchedParam);
 	if ( pthread_create(&tid[8], NULL, display_worker, NULL ) < 0)
+		cout << "taskSpawn display_worker failed!" << endl;
+
+	mySchedParam.sched_priority = 20;
+	pthread_attr_setschedparam(&attrib, &mySchedParam);
+	if ( pthread_create(&tid[9], NULL, speed_worker, NULL ) < 0)
+		cout << "taskSpawn display_worker failed!" << endl;
+
+	mySchedParam.sched_priority = 20;
+	pthread_attr_setschedparam(&attrib, &mySchedParam);
+	if ( pthread_create(&tid[10], NULL, angle_worker, NULL ) < 0)
 		cout << "taskSpawn display_worker failed!" << endl;
 
 	/* sleep(1); */
