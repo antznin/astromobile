@@ -5,7 +5,7 @@
 
 void init();
 
-#define THREAD_NUM 10
+#define THREAD_NUM 9
 
 #define PERIOD 0.01
 
