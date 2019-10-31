@@ -50,31 +50,34 @@ int main() {
 
 void * cameraControl_worker(void * data) {
     double delta, x, y;
-        while(1)        {
-                pthread_mutex_lock(&mutDataCurrPos);
-                x = myData.currPos.x;
-                y = myData.currPos.y;
-                pthread_mutex_unlock(&mutDataCurrPos);
-                while (delta < 10) {
-                        pthread_mutex_lock(&mutDataCurrPos);
-                        delta = sqrt(pow((myData.currPos.x - x), 2) + pow((myData.currPos.y - y), 2));
-                        pthread_mutex_unlock(&mutDataCurrPos);
-                }
-                takePx = true;
-                delta = 0;
-                }
-        return NULL;
+	while(1) {
+		pthread_mutex_lock(&mutDataCurrPos);
+		x = myData.currPos.x;
+		y = myData.currPos.y;
+		pthread_mutex_unlock(&mutDataCurrPos);
+		while (delta < 10) {
+				pthread_mutex_lock(&mutDataCurrPos);
+				delta = sqrt(pow((myData.currPos.x - x), 2) + pow((myData.currPos.y - y), 2));
+				pthread_mutex_unlock(&mutDataCurrPos);
+		}
+		takePx = true;
+		delta = 0;
+
+		sleep(PERIOD);
+	}
+	return NULL;
 }
+
 void * camera_worker(void * data) {
         rgb_t image;
-        while(1)        {
-                if (takePx) {
-                	pthread_mutex_lock(&mutDataCurrPos);
-                    image = pm.takePhoto(myData.currPos);
-                	pthread_mutex_unlock(&mutDataCurrPos);
-                	//cout << "photo taken" << endl;
-                    takePx = false;        }
-        sleep(PERIOD);
+        while(1) {
+			if (takePx) {
+				pthread_mutex_lock(&mutDataCurrPos);
+				image = pm.takePhoto(myData.currPos);
+				pthread_mutex_unlock(&mutDataCurrPos);
+				takePx = false;
+			}
+			sleep(PERIOD);
         }
         return NULL;
 }
@@ -83,20 +86,18 @@ void * battery_worker(void * data) {
 
 	float speed_local;
 
-
 	while(1)	{
 		if (inCharge)	{
 			pthread_mutex_lock(&mutDataBattLevel);
-			myData.battLevel += COEFF_CHARGE;
+			myData.battLevel += CONST_CHARGE;
 			pthread_mutex_unlock(&mutDataBattLevel);
 		}
 		pthread_mutex_lock(&mutDataSpeed);
 		speed_local = myData.speed;
 		pthread_mutex_unlock(&mutDataSpeed);
 		pthread_mutex_lock(&mutDataBattLevel);
-		myData.battLevel -= (COEFF_DECHARGE*speed_local + CONST_DECHARGE);
+		myData.battLevel -= (COEFF_DECHARGE * speed_local + CONST_DECHARGE);
 		pthread_mutex_unlock(&mutDataBattLevel);
-		//cout << myData.battLevel << endl;
 
 		sleep(1);
 	}
@@ -126,14 +127,8 @@ void * currPos_worker(void * data) {
 		myData.currPos.y += deltaY;	
 		pthread_mutex_unlock(&mutDataCurrPos);	
 
-		// cout << "x :" << myData.currPos.x << " y : " << myData.currPos.y << endl;
-	
 		sleep(PERIOD); // period
 	}
-	/* return NULL; */ 
-}	
-
-void * angle_worker(void * data) {
 	return NULL; 
 }	
 
@@ -240,6 +235,7 @@ void * destControl_worker(void * data) {
 	}
 	return NULL; 
 }	
+
 void * battLow_worker(void * data) {
 	float bat;
 	while (1)	{
@@ -250,9 +246,11 @@ void * battLow_worker(void * data) {
 			lowBat = true;
 		else
 			lowBat = false;
-		sleep(PERIOD);	}
+		sleep(PERIOD);
+	}
 	return NULL; 
 }	
+
 void * battHigh_worker(void * data) {
 	float bat;
 	while (1)	{
@@ -263,50 +261,50 @@ void * battHigh_worker(void * data) {
 			highBat = true;
 		else
 			highBat = false;
-		sleep(PERIOD);	}
+		sleep(PERIOD);
+	}
 	return NULL; 
 }	
 
 char * getCarState(enum carState state) {
 	switch (state) {
-	  case GOTO_DEST: return (char *)"GOTO_DEST";
+	  case GOTO_DEST:    return (char *)"GOTO_DEST";
 	  case PRE_BATT_LOW: return (char *)"PRE_BATT_LOW";
-	  case BATT_LOW: return (char *)"BATT_LOW";
-	  case CHARGING: return (char *)"CHARGING";
-	  default: return (char *)"UNKNOWN";
+	  case BATT_LOW:     return (char *)"BATT_LOW";
+	  case CHARGING:     return (char *)"CHARGING";
+	  default:           return (char *)"UNKNOWN";
    }
 }
 
 void * display_worker(void * data) {
+
+	float bat, speed_local, angle_local;
+	double x, y;
+
 	while (1)	{
 
 		cout << "******************DISPLAY******************" << endl;
 
-		float bat;
 		pthread_mutex_lock(&mutDataBattLevel);
 		bat = myData.battLevel;
 		pthread_mutex_unlock(&mutDataBattLevel);
 		cout << "battLevel: " << bat << "%." <<  endl;
 
-		float speed_local;
 		pthread_mutex_lock(&mutDataSpeed);
 		speed_local = myData.speed;
 		pthread_mutex_unlock(&mutDataSpeed);
 		cout << "speed: " << speed_local << "km/h        carState: " << getCarState(state) << endl;
 
-		float angle_local;
 		pthread_mutex_lock(&mutDataAngle);
 		angle_local = myData.angle;
 		pthread_mutex_unlock(&mutDataAngle);
 		cout << "angle: " << angle_local << "°" << endl;
 
-		double x, y;
 		pthread_mutex_lock(&mutDataCurrPos);
 		x = myData.currPos.x;
 		y = myData.currPos.y;
 		pthread_mutex_unlock(&mutDataCurrPos);
 		cout << " currPos.x: " << setw(9) << x            << "  currPos.y: " << y << endl;
-
 		cout << "nextStep.x: " << setw(9) << nextStep.x   << " nextStep.y: " << nextStep.y << endl;
 		cout << "    dest.x: " << setw(9) << dest.x       << "     dest.y: " << dest.y << endl;
 		cout << " station.x: " << setw(9) << stationPos.x << "  station.y: " << stationPos.y << endl;
@@ -332,7 +330,6 @@ void init()
 	pthread_t tid[THREAD_NUM];
 	pthread_attr_t attrib;
 	struct sched_param mySchedParam;
-//	struct mq_attr mqattr;
 	int i; 
 
 	// creation des threads
@@ -364,38 +361,26 @@ void init()
 
 	mySchedParam.sched_priority = 20;
 	pthread_attr_setschedparam(&attrib, &mySchedParam);
-	if ( pthread_create(&tid[4], NULL, angle_worker, NULL ) < 0)
-		printf("taskSpawn angle_worker failed!\n");
-	
-	mySchedParam.sched_priority = 20;
-	pthread_attr_setschedparam(&attrib, &mySchedParam);
-	if ( pthread_create(&tid[5], NULL, navControl_worker, NULL ) < 0)
-		printf("taskSpawn navControl_worker failed!\n");
-
-	mySchedParam.sched_priority = 20;
-	pthread_attr_setschedparam(&attrib, &mySchedParam);
-	if ( pthread_create(&tid[6], NULL, destControl_worker, NULL ) < 0)
+	if ( pthread_create(&tid[5], NULL, destControl_worker, NULL ) < 0)
 		printf("taskSpawn destControl_worker failed!\n");
 
 	mySchedParam.sched_priority = 1;
 	pthread_attr_setschedparam(&attrib, &mySchedParam);
-	if ( pthread_create(&tid[7], NULL, battLow_worker, NULL ) < 0)
+	if ( pthread_create(&tid[6], NULL, battLow_worker, NULL ) < 0)
 		printf("taskSpawn battLow_worker failed!\n");
 
 	mySchedParam.sched_priority = 1;
 	pthread_attr_setschedparam(&attrib, &mySchedParam);
-	if ( pthread_create(&tid[8], NULL, battHigh_worker, NULL ) < 0)
+	if ( pthread_create(&tid[7], NULL, battHigh_worker, NULL ) < 0)
 		printf("taskSpawn battHigh_worker failed!\n");
 
 	mySchedParam.sched_priority = 20;
 	pthread_attr_setschedparam(&attrib, &mySchedParam);
-	if ( pthread_create(&tid[9], NULL, display_worker, NULL ) < 0)
+	if ( pthread_create(&tid[8], NULL, display_worker, NULL ) < 0)
 		printf("taskSpawn display_worker failed!\n");
 
 	sleep(30);
 	pm.dumpImage("./map.bmp");
-	cout << "test" << endl;
-//	exit(0);
 
 	// join des threads
 	for (i = 0; i < 10; ++i) {

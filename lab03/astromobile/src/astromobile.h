@@ -18,10 +18,9 @@ void init();
 #define MSG_PRI_MED  20
 #define MSG_PRI_HIGH 30
 
-#define COEFF_CHARGE 5	//1/60		//la batterie gagne 1% par minute en charge
-//#define COEFF_DECHARGE 0.00555 //1/(60*30)		//la batterie perd coeff*vitesse par
+#define CONST_CHARGE 5	// = 1/60		//la batterie gagne 1% par minute en charge
+#define COEFF_DECHARGE 0.00555 //1/(60*30)		//la batterie perd coeff*vitesse par
 //minute en décharge, donc 1% perdu par minute quand elle roule a 30
-#define COEFF_DECHARGE 0.05
 #define CONST_DECHARGE 0.001666	//1/(60*10)		//la batterie perd constament 1%
 //toutes les 10mn indépendamment de la vitesse
 
@@ -34,15 +33,6 @@ struct physicsData {
 
 // État de la machine pour la machine à états
 enum carState {GOTO_DEST, PRE_BATT_LOW, BATT_LOW, CHARGING};
-
-typedef enum {MSG_DATA, MSG_ALERTE} msgType;
-
-// structure de message partagé entre les tâches
-typedef struct {
-	int ID;
-	msgType type;
-	unsigned int size;
-} message;
 
 // Mutex pour protéger
 pthread_mutex_t mutDataSpeed     = PTHREAD_MUTEX_INITIALIZER;
