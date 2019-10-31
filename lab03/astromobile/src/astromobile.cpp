@@ -18,9 +18,12 @@
 #include <math.h>
 #include <iomanip>  // needed to use manipulators with parameters (precision, width)
 #include <cmath>
-
+#include <sys/netmgr.h>   /* ND_LOCAL_NODE */
+#include <sys/neutrino.h> /* ChannelCreate ConnectAttach MsgReceive */
 #include "genMap.h"
 #include "astromobile.h"
+
+//Manque a creer un timer et un pulse handler par tache
 
 using namespace std;
 
@@ -41,6 +44,43 @@ bool destReached;
 bool lowBat;
 bool highBat;
 
+/* Semaphores for pulse synchronization */
+	sem_t task0_sync;
+	sem_t task1_sync;
+	sem_t task2_sync;
+
+
+	int32_t init_timer(struct sigevent* event, struct itimerspec* itime,
+			timer_t* timer, const int32_t chanel_id,   const uint32_t period) {
+		int32_t error;
+		int32_t period_s;
+		int32_t period_ns;
+
+		/* Set event as pulse and attach to channel */
+		event->sigev_notify = SIGEV_PULSE;
+		event->sigev_coid   = ConnectAttach(ND_LOCAL_NODE, 0, chanel_id, _NTO_SIDE_CHANNEL, 0);
+
+		/* Create timer and associate to event */
+		error = timer_create(CLOCK_MONOTONIC, event, timer);
+		if(0 != error) {
+			printf("Error creating timer\n");
+			return error;
+		}
+
+		/* Set the itime structure */
+		period_s  = period / 1000;
+		period_ns = (1000000 * period) - (period_s * 1000000000);
+		itime->it_value.tv_sec = period_s;
+		itime->it_value.tv_nsec = period_ns;
+		itime->it_interval.tv_sec = period_s;
+		itime->it_interval.tv_nsec = period_ns;
+
+		/* Set the timer period */
+		return timer_settime(*timer, 0, itime, NULL);
+
+	}
+
+
 int main() {
 
 	init();
@@ -60,7 +100,12 @@ void * cameraControl_worker(void * data) {
 				delta = sqrt(pow((myData.currPos.x - x), 2) + pow((myData.currPos.y - y), 2));
 				pthread_mutex_unlock(&mutDataCurrPos);
 		}
-		takePx = true;
+		//takePx = true;
+		//release semaphore
+		if(0 != sem_post(&task0_sync)) {
+			/* Print error */
+			printf("Could not post semaphore: %d\n", errno);
+		}
 		delta = 0;
 
 		sleep(PERIOD);
@@ -71,20 +116,27 @@ void * cameraControl_worker(void * data) {
 void * camera_worker(void * data) {
         rgb_t image;
         while(1) {
-			if (takePx) {
+        	/* Wait to release the semaphore */
+        	if(0 == sem_wait(&task0_sync)) {
+			//if (takePx) {
 				pthread_mutex_lock(&mutDataCurrPos);
 				image = pm.takePhoto(myData.currPos);
 				pthread_mutex_unlock(&mutDataCurrPos);
-				takePx = false;
+				//takePx = false;
 			}
+        	else {
+        		/* Print error */
+        		printf("Task camera_worker could not get time: %d\n", errno);	}
+        	}
 			sleep(PERIOD);
-        }
+
         return NULL;
 }
 
 void * battery_worker(void * data) {
 
 	float speed_local;
+	float batt_local;
 
 	while(1)	{
 		if (inCharge)	{
@@ -97,7 +149,20 @@ void * battery_worker(void * data) {
 		pthread_mutex_unlock(&mutDataSpeed);
 		pthread_mutex_lock(&mutDataBattLevel);
 		myData.battLevel -= (COEFF_DECHARGE * speed_local + CONST_DECHARGE);
+		batt_local = myData.battLevel;
 		pthread_mutex_unlock(&mutDataBattLevel);
+		if (batt_local <= 10)	{
+			if(0 != sem_post(&task1_sync)) {
+					/* Print error */
+					printf("Could not post semaphore: %d\n", errno);
+				}
+		}
+		else if (batt_local >= 80)	{
+			if(0 != sem_post(&task2_sync)) {
+					/* Print error */
+					printf("Could not post semaphore: %d\n", errno);
+				}
+		}
 
 		sleep(1);
 	}
@@ -237,30 +302,34 @@ void * destControl_worker(void * data) {
 }	
 
 void * battLow_worker(void * data) {
-	float bat;
+	//float bat;
 	while (1)	{
-		pthread_mutex_lock(&mutDataBattLevel);
+		/*pthread_mutex_lock(&mutDataBattLevel);
 		bat = myData.battLevel;
-		pthread_mutex_unlock(&mutDataBattLevel);
-		if (bat <= 10 && !inCharge)
+		pthread_mutex_unlock(&mutDataBattLevel);	*/
+		if(0 == sem_wait(&task1_sync)) {
+		//if (bat <= 10 && !inCharge)
 			lowBat = true;
-		else
-			lowBat = false;
+		}
+
+
+		/*else
+			lowBat = false;*/
 		sleep(PERIOD);
 	}
 	return NULL; 
 }	
 
 void * battHigh_worker(void * data) {
-	float bat;
+	//float bat;
 	while (1)	{
-		pthread_mutex_lock(&mutDataBattLevel);
+		/*pthread_mutex_lock(&mutDataBattLevel);
 		bat = myData.battLevel;
-		pthread_mutex_unlock(&mutDataBattLevel);
-		if (bat >= 80 && inCharge)
+		pthread_mutex_unlock(&mutDataBattLevel);	*/
+		if(0 == sem_wait(&task2_sync))
 			highBat = true;
-		else
-			highBat = false;
+		/*else
+			highBat = false;*/
 		sleep(PERIOD);
 	}
 	return NULL; 
@@ -327,6 +396,27 @@ void init()
 	destReached = true;
 	stationPos.x = 0; stationPos.y = 0;
 
+
+	/* Initialize the semaphore */
+	if(0 != sem_init(&task0_sync, 0, 0)) {
+		/* Print error */
+		printf("Could not get init semaphore: %d\n", errno);
+		//return EXIT_FAILURE;
+	}
+
+	if(0 != sem_init(&task1_sync, 0, 0)) {
+		/* Print error */
+		printf("Could not get init semaphore: %d\n", errno);
+		//return EXIT_FAILURE;
+	}
+
+	if(0 != sem_init(&task2_sync, 0, 0)) {
+		/* Print error */
+		printf("Could not get init semaphore: %d\n", errno);
+		//return EXIT_FAILURE;
+	}
+
+
 	pthread_t tid[THREAD_NUM];
 	pthread_attr_t attrib;
 	struct sched_param mySchedParam;
@@ -388,7 +478,7 @@ void init()
 	if ( pthread_create(&tid[8], NULL, display_worker, NULL ) < 0)
 		cout << "taskSpawn display_worker failed!" << endl;
 
-	sleep();
+	sleep(1);
 	pm.dumpImage("./map.bmp");
 
 	// join des threads
