@@ -32,6 +32,7 @@ PathMap pm;
 struct physicsData myData;
 
 enum carState state = GOTO_DEST; // état initial à GOTO_DEST
+enum speeds speedState;
 
 coord_t nextStep;
 coord_t dest;
@@ -44,14 +45,20 @@ bool destReached;
 bool lowBat;
 bool highBat;
 
-/* Semaphores for pulse synchronization */
-	sem_t task0_sync;
-	sem_t task1_sync;
-	sem_t task2_sync;
+// nombre d'étapes atteintes entre deux destinations
+unsigned int nb_stepReached; 
+// nombre de destinations atteintes
+unsigned int nb_destReached;
+
+/* Semaphores for synchronization */
+sem_t taskCamera_sync;
+sem_t taskBattlow_sync;
+sem_t taskBatthigh_sync;
 
 
-	int32_t init_timer(struct sigevent* event, struct itimerspec* itime,
-			timer_t* timer, const int32_t chanel_id,   const uint32_t period) {
+int32_t init_timer(struct sigevent* event, struct itimerspec* itime,
+				   timer_t* timer, const int32_t chanel_id, const uint32_t period) {
+
 		int32_t error;
 		int32_t period_s;
 		int32_t period_ns;
@@ -100,10 +107,8 @@ void * cameraControl_worker(void * data) {
 				delta = sqrt(pow((myData.currPos.x - x), 2) + pow((myData.currPos.y - y), 2));
 				pthread_mutex_unlock(&mutDataCurrPos);
 		}
-		//takePx = true;
 		//release semaphore
-		if(0 != sem_post(&task0_sync)) {
-			/* Print error */
+		if(0 != sem_post(&taskCamera_sync)) {
 			printf("Could not post semaphore: %d\n", errno);
 		}
 		delta = 0;
@@ -117,15 +122,11 @@ void * camera_worker(void * data) {
         rgb_t image;
         while(1) {
         	/* Wait to release the semaphore */
-        	if(0 == sem_wait(&task0_sync)) {
-			//if (takePx) {
+        	if(0 == sem_wait(&taskCamera_sync)) {
 				pthread_mutex_lock(&mutDataCurrPos);
 				image = pm.takePhoto(myData.currPos);
 				pthread_mutex_unlock(&mutDataCurrPos);
-				//takePx = false;
-			}
-        	else {
-        		/* Print error */
+			} else {
         		printf("Task camera_worker could not get time: %d\n", errno);	}
         	}
 			sleep(PERIOD);
@@ -152,14 +153,12 @@ void * battery_worker(void * data) {
 		batt_local = myData.battLevel;
 		pthread_mutex_unlock(&mutDataBattLevel);
 		if (batt_local <= 10)	{
-			if(0 != sem_post(&task1_sync)) {
-					/* Print error */
+			if(0 != sem_post(&taskBattlow_sync)) {
 					printf("Could not post semaphore: %d\n", errno);
 				}
 		}
 		else if (batt_local >= 80)	{
-			if(0 != sem_post(&task2_sync)) {
-					/* Print error */
+			if(0 != sem_post(&taskBatthigh_sync)) {
 					printf("Could not post semaphore: %d\n", errno);
 				}
 		}
@@ -169,6 +168,37 @@ void * battery_worker(void * data) {
 	return NULL; 
 }	
 
+void * speed_worker(void * data) {
+	while (1) {
+		switch (speedState) {
+			case VIT0:
+				pthread_mutex_lock(&mutDataSpeed);
+				myData.speed = 0;
+				pthread_mutex_unlock(&mutDataSpeed);
+				break;
+			case VIT30:
+				pthread_mutex_lock(&mutDataSpeed);
+				myData.speed = 30;
+				pthread_mutex_unlock(&mutDataSpeed);
+				break;
+			case VIT50:
+				pthread_mutex_lock(&mutDataSpeed);
+				myData.speed = 50;
+				pthread_mutex_unlock(&mutDataSpeed);
+				break;
+			default:
+				pthread_mutex_lock(&mutDataSpeed);
+				myData.speed = 0;
+				pthread_mutex_unlock(&mutDataSpeed);
+				break;
+		}
+		sleep(PERIOD);
+	}
+}
+
+void * speed_worker(void * data) {
+
+}
 
 /******************************************************
 * currPos_worker : met à jour la position en fonction *
@@ -225,23 +255,22 @@ void * navControl_worker(void * data) {
 		pthread_mutex_unlock(&mutDataCurrPos);
 		switch(state) {
 			case GOTO_DEST:
-				pthread_mutex_lock(&mutDataSpeed);
-				myData.speed = 50;
-				pthread_mutex_unlock(&mutDataSpeed);
+				speedState = VIT50;
 				if (lowBat) {
 					state = PRE_BATT_LOW;
 				} else {
 					if (destReached) {
 						// Destination atteinte donc on en génère une nouvelle
-						cout << "INFO : Destination reached" << endl;
+						nb_destReached += 1;
 						pm.genDest(currPos_local, dest);
 						pm.genWp(currPos_local, dest, nextStep);
+						nb_stepReached = 0; // resetting this variable
 						destReached = false;
 					} else {	
 						// Étape atteinte ?
 						if (nextStepReached(currPos_local, nextStep)) {
+							nb_stepReached += 1;
 							// On génère la prochaine étape
-							//cout << "INFO : Step reached" << endl;
 							pm.genWp(currPos_local, dest, nextStep);
 						} else {
 							// Sinon on met à jour l'angle
@@ -253,9 +282,7 @@ void * navControl_worker(void * data) {
 				}
 				break;
 			case PRE_BATT_LOW:
-				pthread_mutex_lock(&mutDataSpeed);
-				myData.speed = 30;
-				pthread_mutex_unlock(&mutDataSpeed);
+				speedState = VIT30;
 				pm.getClosestStation(currPos_local, stationPos);
 				state = BATT_LOW;
 				break;
@@ -267,9 +294,7 @@ void * navControl_worker(void * data) {
 					state = CHARGING;
 				break;
 			case CHARGING:
-				pthread_mutex_lock(&mutDataSpeed);
-				myData.speed = 0;
-				pthread_mutex_unlock(&mutDataSpeed);
+				speedState = VIT0;
 				inCharge = true;
 				if (highBat) {
 					// On genere une nouvelle etape a partir de la station
@@ -307,7 +332,7 @@ void * battLow_worker(void * data) {
 		/*pthread_mutex_lock(&mutDataBattLevel);
 		bat = myData.battLevel;
 		pthread_mutex_unlock(&mutDataBattLevel);	*/
-		if(0 == sem_wait(&task1_sync)) {
+		if(0 == sem_wait(&taskBattlow_sync)) {
 		//if (bat <= 10 && !inCharge)
 			lowBat = true;
 		}
@@ -326,7 +351,7 @@ void * battHigh_worker(void * data) {
 		/*pthread_mutex_lock(&mutDataBattLevel);
 		bat = myData.battLevel;
 		pthread_mutex_unlock(&mutDataBattLevel);	*/
-		if(0 == sem_wait(&task2_sync))
+		if(0 == sem_wait(&taskBatthigh_sync))
 			highBat = true;
 		/*else
 			highBat = false;*/
@@ -371,13 +396,14 @@ void * display_worker(void * data) {
 		pthread_mutex_unlock(&mutDataCurrPos);
 
 		cout << "******************DISPLAY******************\n"
-		     << "battLevel: " << bat << "%.\n"
-		     << "speed: " << speed_local << "km/h        carState: " << getCarState(state) << "\n"
-		     << "angle: " << angle_local << "°\n"
-		     << " currPos.x: " << setw(9) << x            << "  currPos.y: " << y << "\n"
-		     << "nextStep.x: " << setw(9) << nextStep.x   << " nextStep.y: " << nextStep.y << "\n"
-		     << "    dest.x: " << setw(9) << dest.x       << "     dest.y: " << dest.y << "\n"
-		     << " station.x: " << setw(9) << stationPos.x << "  station.y: " << stationPos.y << "\n"
+		     << "battLevel: " << bat         << "%.\n"
+		     << "speed: "     << speed_local << "km/h        carState: " << getCarState(state) << "\n"
+		     << "angle: "     << angle_local << "°\n"
+		     << " currPos.x: " << setw(9) << x              << "  currPos.y: " << y              << "\n"
+		     << "nextStep.x: " << setw(9) << nextStep.x     << " nextStep.y: " << nextStep.y     << "\n"
+		     << "    dest.x: " << setw(9) << dest.x         << "     dest.y: " << dest.y         << "\n"
+		     << " station.x: " << setw(9) << stationPos.x   << "  station.y: " << stationPos.y   << "\n"
+			 << "   nb step: " << setw(9) << nb_stepReached << "    nb dest: " << nb_destReached << "\n"
 		     << "*******************************************" << endl;
 
 		sleep(0.5);
@@ -387,35 +413,26 @@ void * display_worker(void * data) {
 
 void init()
 {
-	myData.speed = 30;
-	myData.angle = 90;
+	// Valeurs initiales
+	myData.speed     = 30;
+	myData.angle     = 90;
 	myData.battLevel = 13;
 	myData.currPos.x = 0;
 	myData.currPos.y = 0;
-
 	destReached = true;
 	stationPos.x = 0; stationPos.y = 0;
-
+	nb_stepReached = 0;
+	nb_destReached = 0;
 
 	/* Initialize the semaphore */
-	if(0 != sem_init(&task0_sync, 0, 0)) {
-		/* Print error */
-		printf("Could not get init semaphore: %d\n", errno);
-		//return EXIT_FAILURE;
-	}
+	if(0 != sem_init(&taskCamera_sync, 0, 0)) 
+		printf("Could not init semaphore: %d\n", errno);
+	
+	if(0 != sem_init(&taskBattlow_sync, 0, 0))
+		printf("Could not init semaphore: %d\n", errno);
 
-	if(0 != sem_init(&task1_sync, 0, 0)) {
-		/* Print error */
-		printf("Could not get init semaphore: %d\n", errno);
-		//return EXIT_FAILURE;
-	}
-
-	if(0 != sem_init(&task2_sync, 0, 0)) {
-		/* Print error */
-		printf("Could not get init semaphore: %d\n", errno);
-		//return EXIT_FAILURE;
-	}
-
+	if(0 != sem_init(&taskBatthigh_sync, 0, 0)) 
+		printf("Could not init semaphore: %d\n", errno);
 
 	pthread_t tid[THREAD_NUM];
 	pthread_attr_t attrib;
@@ -427,10 +444,6 @@ void init()
 	pthread_attr_init (&attrib);
 	pthread_attr_setinheritsched (&attrib, PTHREAD_EXPLICIT_SCHED);
 	pthread_attr_setschedpolicy (&attrib, SCHED_FIFO);
-
-	void ** workerList[THREAD_NUM] = {cameraControl_worker, camera_worker, battery_worker, currPos_worker,
-				  destControl_worker, battLow_worker, battHigh_worker, display_worker};
-
 
 	mySchedParam.sched_priority = 20;
 	pthread_attr_setschedparam(&attrib, &mySchedParam);
@@ -478,8 +491,8 @@ void init()
 	if ( pthread_create(&tid[8], NULL, display_worker, NULL ) < 0)
 		cout << "taskSpawn display_worker failed!" << endl;
 
-	sleep(1);
-	pm.dumpImage("./map.bmp");
+	/* sleep(1); */
+	/* pm.dumpImage("./map.bmp"); */
 
 	// join des threads
 	for (i = 0; i < 10; ++i) {

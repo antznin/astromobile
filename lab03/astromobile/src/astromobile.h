@@ -34,6 +34,9 @@ struct physicsData {
 // État de la machine pour la machine à états
 enum carState {GOTO_DEST, PRE_BATT_LOW, BATT_LOW, CHARGING};
 
+// vitesses possibles
+enum speeds {VIT0, VIT30, VIT50};
+
 // Mutex pour protéger
 pthread_mutex_t mutDataSpeed     = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutDataBattLevel = PTHREAD_MUTEX_INITIALIZER;
