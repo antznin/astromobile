@@ -338,21 +338,24 @@ void init()
 	pthread_attr_setinheritsched (&attrib, PTHREAD_EXPLICIT_SCHED);
 	pthread_attr_setschedpolicy (&attrib, SCHED_FIFO);
 
+	void ** workerList[THREAD_NUM] = {cameraControl_worker, camera_worker, battery_worker, currPos_worker,
+				  destControl_worker, battLow_worker, battHigh_worker, display_worker};
+
 
 	mySchedParam.sched_priority = 20;
 	pthread_attr_setschedparam(&attrib, &mySchedParam);
 	if ( pthread_create(&tid[0], NULL, cameraControl_worker, NULL ) < 0)
-		printf("taskSpawn cameraControl_worker failed!\n");
+		cout << "taskSpawn cameraControl_worker failed!" << endl;
 
 	mySchedParam.sched_priority = 20;
 	pthread_attr_setschedparam(&attrib, &mySchedParam);
 	if ( pthread_create(&tid[1], NULL, camera_worker, NULL ) < 0)
-		printf("taskSpawn camera_worker failed!\n");
+		cout << "taskSpawn camera_worker failed!" << endl;
 
 	mySchedParam.sched_priority = 20;
 	pthread_attr_setschedparam(&attrib, &mySchedParam);
 	if ( pthread_create(&tid[2], NULL, battery_worker, NULL ) < 0)
-		printf("taskSpawn battery_worker failed!\n");
+		cout << "taskSpawn battery_worker failed!" << endl;
 
 	mySchedParam.sched_priority = 1;
 	pthread_attr_setschedparam(&attrib, &mySchedParam);
@@ -368,22 +371,22 @@ void init()
 	mySchedParam.sched_priority = 20;
 	pthread_attr_setschedparam(&attrib, &mySchedParam);
 	if ( pthread_create(&tid[5], NULL, destControl_worker, NULL ) < 0)
-		printf("taskSpawn destControl_worker failed!\n");
+		cout << "taskSpawn destControl_worker failed!" << endl;
 
 	mySchedParam.sched_priority = 1;
 	pthread_attr_setschedparam(&attrib, &mySchedParam);
 	if ( pthread_create(&tid[6], NULL, battLow_worker, NULL ) < 0)
-		printf("taskSpawn battLow_worker failed!\n");
+		cout << "taskSpawn battLow_worker failed!" << endl;
 
 	mySchedParam.sched_priority = 1;
 	pthread_attr_setschedparam(&attrib, &mySchedParam);
 	if ( pthread_create(&tid[7], NULL, battHigh_worker, NULL ) < 0)
-		printf("taskSpawn battHigh_worker failed!\n");
+		cout << "taskSpawn battHigh_worker failed!" << endl;
 
 	mySchedParam.sched_priority = 20;
 	pthread_attr_setschedparam(&attrib, &mySchedParam);
 	if ( pthread_create(&tid[8], NULL, display_worker, NULL ) < 0)
-		printf("taskSpawn display_worker failed!\n");
+		cout << "taskSpawn display_worker failed!" << endl;
 
 	sleep();
 	pm.dumpImage("./map.bmp");
