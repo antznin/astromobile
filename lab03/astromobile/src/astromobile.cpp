@@ -116,7 +116,7 @@ void * currPos_worker(void * data) {
 	while (1) { 
 
 		pthread_mutex_lock(&mutDataSpeed);
-		dist = 1000 * (myData.speed * (PERIOD/3600));
+		dist = 1000 * (myData.speed * (PERIOD/3600)) * 10;
 		pthread_mutex_unlock(&mutDataSpeed);
 		pthread_mutex_lock(&mutDataAngle);
 		deltaX = dist * cos(myData.angle * PI / 180);
@@ -176,7 +176,7 @@ void * navControl_worker(void * data) {
 						// Étape atteinte ?
 						if (nextStepReached(currPos_local, nextStep)) {
 							// On génère la prochaine étape
-							cout << "INFO : Step reached" << endl;
+							//cout << "INFO : Step reached" << endl;
 							pm.genWp(currPos_local, dest, nextStep);
 						} else {
 							// Sinon on met à jour l'angle
@@ -215,7 +215,7 @@ void * navControl_worker(void * data) {
 				}
 				break;
 		}
-	sleep(0.1);
+	sleep(PERIOD);
 	}
 	return NULL; 
 }
@@ -283,35 +283,35 @@ void * display_worker(void * data) {
 
 	while (1)	{
 
-		cout << "******************DISPLAY******************" << endl;
 
 		pthread_mutex_lock(&mutDataBattLevel);
 		bat = myData.battLevel;
 		pthread_mutex_unlock(&mutDataBattLevel);
-		cout << "battLevel: " << bat << "%." <<  endl;
 
 		pthread_mutex_lock(&mutDataSpeed);
 		speed_local = myData.speed;
 		pthread_mutex_unlock(&mutDataSpeed);
-		cout << "speed: " << speed_local << "km/h        carState: " << getCarState(state) << endl;
 
 		pthread_mutex_lock(&mutDataAngle);
 		angle_local = myData.angle;
 		pthread_mutex_unlock(&mutDataAngle);
-		cout << "angle: " << angle_local << "°" << endl;
 
 		pthread_mutex_lock(&mutDataCurrPos);
 		x = myData.currPos.x;
 		y = myData.currPos.y;
 		pthread_mutex_unlock(&mutDataCurrPos);
-		cout << " currPos.x: " << setw(9) << x            << "  currPos.y: " << y << endl;
-		cout << "nextStep.x: " << setw(9) << nextStep.x   << " nextStep.y: " << nextStep.y << endl;
-		cout << "    dest.x: " << setw(9) << dest.x       << "     dest.y: " << dest.y << endl;
-		cout << " station.x: " << setw(9) << stationPos.x << "  station.y: " << stationPos.y << endl;
 
-		cout << "*******************************************" << endl;
+		cout << "******************DISPLAY******************\n"
+		     << "battLevel: " << bat << "%.\n"
+		     << "speed: " << speed_local << "km/h        carState: " << getCarState(state) << "\n"
+		     << "angle: " << angle_local << "°\n"
+		     << " currPos.x: " << setw(9) << x            << "  currPos.y: " << y << "\n"
+		     << "nextStep.x: " << setw(9) << nextStep.x   << " nextStep.y: " << nextStep.y << "\n"
+		     << "    dest.x: " << setw(9) << dest.x       << "     dest.y: " << dest.y << "\n"
+		     << " station.x: " << setw(9) << stationPos.x << "  station.y: " << stationPos.y << "\n"
+		     << "*******************************************" << endl;
 
-		sleep(3);
+		sleep(0.5);
 	}
 	return NULL; 
 }	
@@ -359,6 +359,12 @@ void init()
 	if ( pthread_create(&tid[3], NULL, currPos_worker, NULL ) < 0)
 		cout << "taskSpawn currPos_worker failed!" << endl;
 
+	 mySchedParam.sched_priority = 20;
+	 pthread_attr_setschedparam(&attrib, &mySchedParam);
+	 if ( pthread_create(&tid[4], NULL, navControl_worker, NULL ) < 0)
+		 printf("taskSpawn navControl_worker failed!\n");
+
+
 	mySchedParam.sched_priority = 20;
 	pthread_attr_setschedparam(&attrib, &mySchedParam);
 	if ( pthread_create(&tid[5], NULL, destControl_worker, NULL ) < 0)
@@ -379,7 +385,7 @@ void init()
 	if ( pthread_create(&tid[8], NULL, display_worker, NULL ) < 0)
 		printf("taskSpawn display_worker failed!\n");
 
-	sleep(30);
+	sleep();
 	pm.dumpImage("./map.bmp");
 
 	// join des threads
