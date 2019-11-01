@@ -57,39 +57,6 @@ sem_t taskCamera_sync;
 sem_t taskBattlow_sync;
 sem_t taskBatthigh_sync;
 
-
-int32_t init_timer(struct sigevent* event, struct itimerspec* itime,
-				   timer_t* timer, const int32_t chanel_id, const uint32_t period) {
-
-		int32_t error;
-		int32_t period_s;
-		int32_t period_ns;
-
-		/* Set event as pulse and attach to channel */
-		event->sigev_notify = SIGEV_PULSE;
-		event->sigev_coid   = ConnectAttach(ND_LOCAL_NODE, 0, chanel_id, _NTO_SIDE_CHANNEL, 0);
-
-		/* Create timer and associate to event */
-		error = timer_create(CLOCK_MONOTONIC, event, timer);
-		if(0 != error) {
-			printf("Error creating timer\n");
-			return error;
-		}
-
-		/* Set the itime structure */
-		period_s  = period / 1000;
-		period_ns = (1000000 * period) - (period_s * 1000000000);
-		itime->it_value.tv_sec = period_s;
-		itime->it_value.tv_nsec = period_ns;
-		itime->it_interval.tv_sec = period_s;
-		itime->it_interval.tv_nsec = period_ns;
-
-		/* Set the timer period */
-		return timer_settime(*timer, 0, itime, NULL);
-
-	}
-
-
 int main() {
 
 	init();
@@ -138,8 +105,7 @@ void * camera_worker(void * data) {
 
 void * battery_worker(void * data) {
 
-	float speed_local;
-	float batt_local;
+	float speed_local, batt_local;
 
 	while(1)	{
 		if (inCharge)	{
@@ -168,7 +134,37 @@ void * battery_worker(void * data) {
 		sleep(1);
 	}
 	return NULL; 
+}
+
+void * battLow_worker(void * data) {
+	//float bat;
+	while (1)	{
+		/*pthread_mutex_lock(&mutDataBattLevel);
+		bat = myData.battLevel;
+		pthread_mutex_unlock(&mutDataBattLevel);	*/
+		if(0 == sem_wait(&taskBattlow_sync)) {
+			lowBat  = true;
+			highBat = false;
+		}
+		sleep(PERIOD);
+	}
+	return NULL;
 }	
+
+void * battHigh_worker(void * data) {
+	//float bat;
+	while (1)	{
+		/*pthread_mutex_lock(&mutDataBattLevel);
+		bat = myData.battLevel;
+		pthread_mutex_unlock(&mutDataBattLevel);	*/
+		if(0 == sem_wait(&taskBatthigh_sync)) {
+			highBat = true;
+			lowBat  = false;
+		}
+		sleep(PERIOD);
+	}
+	return NULL;
+}
 
 /*************************************************************
 * Thread representant la partie continue qui modifie l'angle *
@@ -336,41 +332,7 @@ void * destControl_worker(void * data) {
 		sleep(0.1);
 	}
 	return NULL; 
-}	
-
-void * battLow_worker(void * data) {
-	//float bat;
-	while (1)	{
-		/*pthread_mutex_lock(&mutDataBattLevel);
-		bat = myData.battLevel;
-		pthread_mutex_unlock(&mutDataBattLevel);	*/
-		if(0 == sem_wait(&taskBattlow_sync)) {
-		//if (bat <= 10 && !inCharge)
-			lowBat = true;
-		}
-
-
-		/*else
-			lowBat = false;*/
-		sleep(PERIOD);
-	}
-	return NULL; 
-}	
-
-void * battHigh_worker(void * data) {
-	//float bat;
-	while (1)	{
-		/*pthread_mutex_lock(&mutDataBattLevel);
-		bat = myData.battLevel;
-		pthread_mutex_unlock(&mutDataBattLevel);	*/
-		if(0 == sem_wait(&taskBatthigh_sync))
-			highBat = true;
-		/*else
-			highBat = false;*/
-		sleep(PERIOD);
-	}
-	return NULL; 
-}	
+}
 
 char * getCarState(enum carState state) {
 	switch (state) {
@@ -418,7 +380,7 @@ void * display_worker(void * data) {
 			 << "   nb step: " << setw(9) << nb_stepReached << "    nb dest: " << nb_destReached << "\n"
 		     << "*******************************************" << endl;
 
-		sleep(0.5);
+		sleep(1);
 	}
 	return NULL; 
 }	
