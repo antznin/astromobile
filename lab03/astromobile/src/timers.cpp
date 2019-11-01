@@ -1,5 +1,7 @@
 #include "timers.h"
 
+#include <stdio.h>        /* printf */
+
 /******************************************************************************
  * Timer initialization routine
  * The function will initialize a timer given the parameters.
@@ -90,9 +92,12 @@ void* task_pulse_handler(void* args) {
 	sync_sem  = ((thread_args_t*)args)->semaphore;
 	task_chid = ((thread_args_t*)args)->chid;
 
-	while(1<2) {
+
+	while(1) {
 		/* Get the pulse message */
 		rcvid = MsgReceive(task_chid, &msg, sizeof(pulse_msg_t), NULL);
+		printf("test %d\n", task_chid);
+
 		if (0 == rcvid) {
 			if (TASK_PULSE_CODE == msg.pulse.code) {
 				/* Release semaphore */
@@ -112,132 +117,3 @@ void* task_pulse_handler(void* args) {
 		}
 	}
 }
-
-//int main(void) {
-//	struct timespec tp;
-//
-//	/* Semaphores for pulse synchronization */
-//	sem_t task0_sync;
-//	sem_t task1_sync;
-//
-//	/* PThread structures */
-//	pthread_t task0;
-//	pthread_t task0_pulse_handler;
-//	pthread_t task1;
-//	pthread_t task1_pulse_handler;
-//
-//	/* Timers event structures */
-//	struct sigevent   task0_event;
-//	struct itimerspec task0_itime;
-//	timer_t           task0_timer;
-//	struct sigevent   task1_event;
-//	struct itimerspec task1_itime;
-//	timer_t           task1_timer;
-//
-//	/* Tasks arguments */
-//	thread_args_t task0_args;
-//	thread_args_t task1_args;
-//
-//	/* Get the start time */
-//	if(0 != clock_gettime(CLOCK_REALTIME, &tp)) {
-//		/* Print error */
-//		printf("Could not get start time: %d\n", errno);
-//		return EXIT_FAILURE;
-//	}
-//
-//	/* Initialize the semaphore */
-//	if(0 != sem_init(&task0_sync, 0, 0)) {
-//		/* Print error */
-//		printf("Could not get init semaphore: %d\n", errno);
-//		return EXIT_FAILURE;
-//	}
-//	if(0 != sem_init(&task1_sync, 0, 0)) {
-//		/* Print error */
-//		printf("Could not get init semaphore: %d\n", errno);
-//		return EXIT_FAILURE;
-//	}
-//
-//	/* Initialize the tasks arguments */
-//	task0_args.id   = 0;
-//	task0_args.semaphore = &task0_sync;
-//	task0_args.starttime = tp.tv_sec;
-//	task0_args.chid      = ChannelCreate(0);
-//	if(-1 == task0_args.chid) {
-//		/* Print error */
-//		printf("Could not create channel: %d\n", errno);
-//		return EXIT_FAILURE;
-//	}
-//
-//	task1_args.id   = 1;
-//	task1_args.semaphore = &task1_sync;
-//	task1_args.starttime = tp.tv_sec;
-//	task1_args.chid      = ChannelCreate(0);
-//	if(-1 == task1_args.chid) {
-//		/* Print error */
-//		printf("Could not create channel: %d\n", errno);
-//		return EXIT_FAILURE;
-//	}
-//
-//	/* Create the different tasks and their associated pulse handlers */
-//	if(0 != pthread_create(&task0, NULL, task_routine, &task0_args)) {
-//		/* Print error */
-//		printf("Could not create thread: %d\n", errno);
-//		return EXIT_FAILURE;
-//	}
-//	if(0 != pthread_create(&task0_pulse_handler, NULL,
-//			               task_pulse_handler, &task0_args)) {
-//		/* Print error */
-//		printf("Could not create thread: %d\n", errno);
-//		return EXIT_FAILURE;
-//	}
-//
-//	if(0 != pthread_create(&task1, NULL, task_routine, &task1_args)) {
-//		/* Print error */
-//		printf("Could not create thread: %d\n", errno);
-//		return EXIT_FAILURE;
-//	}
-//	if(0 != pthread_create(&task1_pulse_handler, NULL,
-//			               task_pulse_handler, &task1_args)) {
-//		/* Print error */
-//		printf("Could not create thread: %d\n", errno);
-//		return EXIT_FAILURE;
-//	}
-//
-//	/* Create timers */
-//	if(0 != init_timer(&task0_event, &task0_itime, &task0_timer,
-//			           task0_args.chid, 500)) {
-//		/* Print error */
-//		printf("Could not create timer: %d\n", errno);
-//		return EXIT_FAILURE;
-//	}
-//	if(0 != init_timer(&task1_event, &task1_itime, &task1_timer,
-//			           task1_args.chid, 1000)) {
-//		/* Print error */
-//		printf("Could not create timer: %d\n", errno);
-//		return EXIT_FAILURE;
-//	}
-//
-//	/* Wait for the threads to finish */
-//	if(0 != pthread_join(task0, NULL)) {
-//		/* Print error */
-//		printf("Could not wait for thread: %d\n", errno);
-//		return EXIT_FAILURE;
-//	}
-//	if(0 != pthread_join(task0_pulse_handler, NULL)) {
-//		/* Print error */
-//		printf("Could not wait for thread: %d\n", errno);
-//		return EXIT_FAILURE;
-//	}
-//	if(0 != pthread_join(task1, NULL)) {
-//		/* Print error */
-//		printf("Could not wait for thread: %d\n", errno);
-//		return EXIT_FAILURE;
-//	}
-//	if(0 != pthread_join(task1_pulse_handler, NULL)) {
-//		/* Print error */
-//		printf("Could not wait for thread: %d\n", errno);
-//		return EXIT_FAILURE;
-//	}
-//
-//	return EXIT_SUCCESS;
-//}

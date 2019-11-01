@@ -5,7 +5,7 @@
 
 void init();
 
-#define THREAD_NUM 10
+#define THREAD_NUM 11
 
 #define PERIOD 0.01
 
@@ -42,5 +42,7 @@ pthread_mutex_t mutDataSpeed     = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutDataBattLevel = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutDataAngle     = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutDataCurrPos   = PTHREAD_MUTEX_INITIALIZER;
+
+#define truc truc
 
 #endif /* ifndef ASTROMOBILE_H */
