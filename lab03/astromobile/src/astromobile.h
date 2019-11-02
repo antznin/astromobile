@@ -43,6 +43,4 @@ pthread_mutex_t mutDataBattLevel = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutDataAngle     = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutDataCurrPos   = PTHREAD_MUTEX_INITIALIZER;
 
-#define truc truc
-
 #endif /* ifndef ASTROMOBILE_H */
