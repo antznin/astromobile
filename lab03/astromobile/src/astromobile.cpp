@@ -95,22 +95,33 @@ void cameraControl_worker(void * data) {
 }
 
 void camera_worker(void * data) {
-        rgb_t image;
-        while(1) {
-        	/* Wait to release the semaphore */
-        	if(0 == sem_wait(&taskCamera_sync)) {
-				pthread_mutex_lock(&mutDataCurrPos);
-				image = pm.takePhoto(myData.currPos);
-				pthread_mutex_unlock(&mutDataCurrPos);
-			} else {
-        		printf("Task camera_worker could not get time: %d\n", errno);	}
-        	}
-			sleep(PERIOD);
 
-        return;
+	sem_t* sync_sem;
+	uint32_t task_id;
+	sync_sem  = ((thread_args_t*)data)->semaphore;
+	task_id   = ((thread_args_t*)data)->id;
+
+	rgb_t image;
+	while(1) {
+		/* Wait to release the semaphore */
+		if(0 == sem_wait(&taskCamera_sync)) {
+			pthread_mutex_lock(&mutDataCurrPos);
+			image = pm.takePhoto(myData.currPos);
+			pthread_mutex_unlock(&mutDataCurrPos);
+		} else {
+			printf("Task camera_worker could not get time: %d\n", errno);
+		}
+		sleep(PERIOD);
+	}
+	return;
 }
 
 void battery_worker(void * data) {
+
+	sem_t* sync_sem;
+	uint32_t task_id;
+	sync_sem  = ((thread_args_t*)data)->semaphore;
+	task_id   = ((thread_args_t*)data)->id;
 
 	float speed_local, batt_local;
 
@@ -144,6 +155,12 @@ void battery_worker(void * data) {
 }
 
 void battLow_worker(void * data) {
+
+	sem_t* sync_sem;
+	uint32_t task_id;
+	sync_sem  = ((thread_args_t*)data)->semaphore;
+	task_id   = ((thread_args_t*)data)->id;
+
 	//float bat;
 	while (1)	{
 		/*pthread_mutex_lock(&mutDataBattLevel);
@@ -159,6 +176,12 @@ void battLow_worker(void * data) {
 }	
 
 void battHigh_worker(void * data) {
+
+	sem_t* sync_sem;
+	uint32_t task_id;
+	sync_sem  = ((thread_args_t*)data)->semaphore;
+	task_id   = ((thread_args_t*)data)->id;
+
 	//float bat;
 	while (1)	{
 		/*pthread_mutex_lock(&mutDataBattLevel);
@@ -179,6 +202,12 @@ void battHigh_worker(void * data) {
 * representation plus correcte du reel                       *
 *************************************************************/
 void angle_worker(void * data) {
+
+	sem_t* sync_sem;
+	uint32_t task_id;
+	sync_sem  = ((thread_args_t*)data)->semaphore;
+	task_id   = ((thread_args_t*)data)->id;
+
 	while (1) {
 		pthread_mutex_lock(&mutDataAngle);
 		myData.angle = orderedAngle;
@@ -192,6 +221,12 @@ void angle_worker(void * data) {
 * vitesse                                                   *
 *************************************************************/
 void speed_worker(void * data) {
+
+	sem_t* sync_sem;
+	uint32_t task_id;
+	sync_sem  = ((thread_args_t*)data)->semaphore;
+	task_id   = ((thread_args_t*)data)->id;
+
 	while (1) {
 		switch (speedState) {
 			case VIT0:
@@ -224,6 +259,11 @@ void speed_worker(void * data) {
 * de la vitesse et de la l'angle					  *
 ******************************************************/
 void currPos_worker(void * data) {
+
+	sem_t* sync_sem;
+	uint32_t task_id;
+	sync_sem  = ((thread_args_t*)data)->semaphore;
+	task_id   = ((thread_args_t*)data)->id;
 
 	float deltaX, deltaY, dist;
 
@@ -265,6 +305,11 @@ double getAngle(coord_t currPos, coord_t nextPos) {
 }
 
 void navControl_worker(void * data) {
+
+	sem_t* sync_sem;
+	uint32_t task_id;
+	sync_sem  = ((thread_args_t*)data)->semaphore;
+	task_id   = ((thread_args_t*)data)->id;
 
 	coord_t currPos_local;
 
@@ -329,6 +374,12 @@ void navControl_worker(void * data) {
 * Ce thread determine quand la voiture est arrivée à la destination *
 ********************************************************************/
 void destControl_worker(void * data) {
+
+	sem_t* sync_sem;
+	uint32_t task_id;
+	sync_sem  = ((thread_args_t*)data)->semaphore;
+	task_id   = ((thread_args_t*)data)->id;
+
 	coord_t currPos_local;
 	while (1) {
 		pthread_mutex_lock(&mutDataCurrPos);
@@ -353,11 +404,15 @@ char * getCarState(enum carState state) {
 
 void display_worker(void * data) {
 
+	sem_t* sync_sem;
+	uint32_t task_id;
+	sync_sem  = ((thread_args_t*)data)->semaphore;
+	task_id   = ((thread_args_t*)data)->id;
+
 	float bat, speed_local, angle_local;
 	double x, y;
 
 	while (1)	{
-
 
 		pthread_mutex_lock(&mutDataBattLevel);
 		bat = myData.battLevel;
