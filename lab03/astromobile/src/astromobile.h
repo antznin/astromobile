@@ -7,7 +7,8 @@ void init();
 
 #define THREAD_NUM 11
 
-#define PERIOD 0.01
+// periode pour les threads continus
+#define PERIOD_CONT 100
 
 #define PI 3.14159265359
 
@@ -18,11 +19,11 @@ void init();
 #define MSG_PRI_MED  20
 #define MSG_PRI_HIGH 30
 
-#define CONST_CHARGE 5	// = 1/60		//la batterie gagne 1% par minute en charge
-#define COEFF_DECHARGE 0.00555 //1/(60*30)		//la batterie perd coeff*vitesse par
-//minute en décharge, donc 1% perdu par minute quand elle roule a 30
-#define CONST_DECHARGE 0.001666	//1/(60*10)		//la batterie perd constament 1%
-//toutes les 10mn indépendamment de la vitesse
+#define CONST_CHARGE 5          // la batterie gagne 5% par période
+#define COEFF_DECHARGE 0.0001   // 1/(60*30)
+								// la batterie perd coeff*vitesse par
+								// minute en décharge, donc 1% perdu par minute quand elle roule a 30
+#define CONST_DECHARGE 0.001666	// 1/(60*10)
 
 struct physicsData {
 	float speed;

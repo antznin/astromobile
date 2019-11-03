@@ -89,7 +89,6 @@ void cameraControl_worker(void * data) {
 		} else {
 			printf("Task %d could not wait semaphore: %d\n", task_id, errno);
 		}
-			sleep(0.1);
 	}
 	return;
 }
@@ -139,7 +138,7 @@ void battery_worker(void * data) {
 			speed_local = myData.speed;
 			pthread_mutex_unlock(&mutDataSpeed);
 			pthread_mutex_lock(&mutDataBattLevel);
-			myData.battLevel -= (COEFF_DECHARGE * speed_local + CONST_DECHARGE);
+			myData.battLevel -= (float)(COEFF_DECHARGE * speed_local + CONST_DECHARGE) * (float)((float)PERIOD_CONT/1000);
 			batt_local = myData.battLevel;
 			pthread_mutex_unlock(&mutDataBattLevel);
 			if (batt_local <= 10)	{
@@ -224,7 +223,6 @@ void angle_worker(void * data) {
 			pthread_mutex_lock(&mutDataAngle);
 			myData.angle = orderedAngle;
 			pthread_mutex_unlock(&mutDataAngle);
-			sleep(PERIOD);
 		} else {
 			printf("Task %d could not wait semaphore: %d\n", task_id, errno);
 		}
@@ -288,7 +286,7 @@ void currPos_worker(void * data) {
 	while (1) {
 		if (sem_wait(sync_sem) == 0) {
 			pthread_mutex_lock(&mutDataSpeed);
-			dist = 1000 * (myData.speed * (PERIOD/3600)) * 10;
+			dist = SIMU_ACCEL * 1000 * myData.speed * PERIOD_CONT / (1000 * 3600) ;
 			pthread_mutex_unlock(&mutDataSpeed);
 			pthread_mutex_lock(&mutDataAngle);
 			deltaX = dist * cos(myData.angle * PI / 180);
@@ -552,13 +550,13 @@ void init()
 
 	// périodes
 	int periods[THREAD_NUM] = {100,  // cameraControl_worker
-							   100,  // camera_worker
-							   100,  // battery_worker
+							   PERIOD_CONT,  // camera_worker
+							   PERIOD_CONT,  // battery_worker
 							   100,  // battLow_worker
 							   100,  // battHigh_worker
-							   100,  // angle_worker
-							   100,  // speed_worker
-							   100,  // currPos_worker
+							   PERIOD_CONT,  // angle_worker
+							   PERIOD_CONT,  // speed_worker
+							   PERIOD_CONT,  // currPos_worker
 							   100,  // navControl_worker
 							   100,  // destControl_worker
 							   1000}; // display_worker
@@ -595,14 +593,14 @@ void init()
 		}
 		mySchedParam.sched_priority = prios[i];
 		pthread_attr_setschedparam(&attrib, &mySchedParam);
-		if (pthread_create(&tid[i], NULL, main_worker, &task_args[i]) < 0) {
+		if (pthread_create(&tid[i], &attrib, main_worker, (void *)&task_args[i]) < 0) {
 			cout << "Thread " << i << " creation failed" << endl;
 			return;
 		}
 		mySchedParam.sched_priority = 1; // maximum priority
 		pthread_attr_setschedparam(&attrib, &mySchedParam);
-		if(0 != pthread_create(&pulseHandlers[i], NULL,
-					           task_pulse_handler, &task_args[i])) {
+		if(0 != pthread_create(&pulseHandlers[i], &attrib,
+					           task_pulse_handler, (void *)&task_args[i])) {
 			printf("Could not create pulse thread: %d\n", errno);
 			return;
 		}
@@ -613,8 +611,8 @@ void init()
 		}
 	}
 
-	/* sleep(1); */
-	/* pm.dumpImage("./map.bmp"); */
+	sleep(60);
+	pm.dumpImage("./map.bmp");
 
 	// join des threads
 	for (i = 0; i < THREAD_NUM; ++i) {
