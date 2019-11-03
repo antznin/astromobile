@@ -95,8 +95,8 @@ void* task_pulse_handler(void* args) {
 
 	while(1) {
 		/* Get the pulse message */
+
 		rcvid = MsgReceive(task_chid, &msg, sizeof(pulse_msg_t), NULL);
-		printf("test %d\n", task_chid);
 
 		if (0 == rcvid) {
 			if (TASK_PULSE_CODE == msg.pulse.code) {

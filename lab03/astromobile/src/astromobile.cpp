@@ -71,7 +71,7 @@ void cameraControl_worker(void * data) {
 
     double delta, x, y;
 	while(1) {
-//		if (sem_wait(sync_sem) == 0) {
+		if (sem_wait(sync_sem) == 0) {
 			pthread_mutex_lock(&mutDataCurrPos);
 			x = myData.currPos.x;
 			y = myData.currPos.y;
@@ -86,9 +86,9 @@ void cameraControl_worker(void * data) {
 				printf("Could not post semaphore: %d\n", errno);
 			}
 			delta = 0;
-//		} else {
-//			printf("Task %d could not wait semaphore: %d\n", task_id, errno);
-//		}
+		} else {
+			printf("Task %d could not wait semaphore: %d\n", task_id, errno);
+		}
 			sleep(0.1);
 	}
 	return;
@@ -103,15 +103,18 @@ void camera_worker(void * data) {
 
 	rgb_t image;
 	while(1) {
-		/* Wait to release the semaphore */
-		if(0 == sem_wait(&taskCamera_sync)) {
-			pthread_mutex_lock(&mutDataCurrPos);
-			image = pm.takePhoto(myData.currPos);
-			pthread_mutex_unlock(&mutDataCurrPos);
+		if (sem_wait(sync_sem) == 0) {
+			/* Wait to release the semaphore */
+			if(0 == sem_wait(&taskCamera_sync)) {
+				pthread_mutex_lock(&mutDataCurrPos);
+				image = pm.takePhoto(myData.currPos);
+				pthread_mutex_unlock(&mutDataCurrPos);
+			} else {
+				printf("Task camera_worker could not get time: %d\n", errno);
+			}
 		} else {
-			printf("Task camera_worker could not get time: %d\n", errno);
+			printf("Task %d could not wait semaphore: %d\n", task_id, errno);
 		}
-		sleep(PERIOD);
 	}
 	return;
 }
@@ -126,30 +129,32 @@ void battery_worker(void * data) {
 	float speed_local, batt_local;
 
 	while(1)	{
-		if (inCharge)	{
+		if (sem_wait(sync_sem) == 0) {
+			if (inCharge)	{
+				pthread_mutex_lock(&mutDataBattLevel);
+				myData.battLevel += CONST_CHARGE;
+				pthread_mutex_unlock(&mutDataBattLevel);
+			}
+			pthread_mutex_lock(&mutDataSpeed);
+			speed_local = myData.speed;
+			pthread_mutex_unlock(&mutDataSpeed);
 			pthread_mutex_lock(&mutDataBattLevel);
-			myData.battLevel += CONST_CHARGE;
+			myData.battLevel -= (COEFF_DECHARGE * speed_local + CONST_DECHARGE);
+			batt_local = myData.battLevel;
 			pthread_mutex_unlock(&mutDataBattLevel);
+			if (batt_local <= 10)	{
+				if(0 != sem_post(&taskBattlow_sync)) {
+						printf("Could not post semaphore: %d\n", errno);
+					}
+			}
+			else if (batt_local >= 80)	{
+				if(0 != sem_post(&taskBatthigh_sync)) {
+						printf("Could not post semaphore: %d\n", errno);
+					}
+			}
+		} else {
+			printf("Task %d could not wait semaphore: %d\n", task_id, errno);
 		}
-		pthread_mutex_lock(&mutDataSpeed);
-		speed_local = myData.speed;
-		pthread_mutex_unlock(&mutDataSpeed);
-		pthread_mutex_lock(&mutDataBattLevel);
-		myData.battLevel -= (COEFF_DECHARGE * speed_local + CONST_DECHARGE);
-		batt_local = myData.battLevel;
-		pthread_mutex_unlock(&mutDataBattLevel);
-		if (batt_local <= 10)	{
-			if(0 != sem_post(&taskBattlow_sync)) {
-					printf("Could not post semaphore: %d\n", errno);
-				}
-		}
-		else if (batt_local >= 80)	{
-			if(0 != sem_post(&taskBatthigh_sync)) {
-					printf("Could not post semaphore: %d\n", errno);
-				}
-		}
-
-		sleep(1);
 	}
 	return; 
 }
@@ -163,14 +168,17 @@ void battLow_worker(void * data) {
 
 	//float bat;
 	while (1)	{
-		/*pthread_mutex_lock(&mutDataBattLevel);
-		bat = myData.battLevel;
-		pthread_mutex_unlock(&mutDataBattLevel);	*/
-		if(0 == sem_wait(&taskBattlow_sync)) {
-			lowBat  = true;
-			highBat = false;
+		if (sem_wait(sync_sem) == 0) {
+			/*pthread_mutex_lock(&mutDataBattLevel);
+			bat = myData.battLevel;
+			pthread_mutex_unlock(&mutDataBattLevel);	*/
+			if(0 == sem_wait(&taskBattlow_sync)) {
+				lowBat  = true;
+				highBat = false;
+			}
+		} else {
+			printf("Task %d could not wait semaphore: %d\n", task_id, errno);
 		}
-		sleep(PERIOD);
 	}
 	return;
 }	
@@ -184,14 +192,17 @@ void battHigh_worker(void * data) {
 
 	//float bat;
 	while (1)	{
-		/*pthread_mutex_lock(&mutDataBattLevel);
-		bat = myData.battLevel;
-		pthread_mutex_unlock(&mutDataBattLevel);	*/
-		if(0 == sem_wait(&taskBatthigh_sync)) {
-			highBat = true;
-			lowBat  = false;
+		if (sem_wait(sync_sem) == 0) {
+			/*pthread_mutex_lock(&mutDataBattLevel);
+			bat = myData.battLevel;
+			pthread_mutex_unlock(&mutDataBattLevel);	*/
+			if(0 == sem_wait(&taskBatthigh_sync)) {
+				highBat = true;
+				lowBat  = false;
+			}
+		} else {
+			printf("Task %d could not wait semaphore: %d\n", task_id, errno);
 		}
-		sleep(PERIOD);
 	}
 	return;
 }
@@ -209,10 +220,14 @@ void angle_worker(void * data) {
 	task_id   = ((thread_args_t*)data)->id;
 
 	while (1) {
-		pthread_mutex_lock(&mutDataAngle);
-		myData.angle = orderedAngle;
-		pthread_mutex_unlock(&mutDataAngle);
-		sleep(PERIOD);
+		if (sem_wait(sync_sem) == 0) {
+			pthread_mutex_lock(&mutDataAngle);
+			myData.angle = orderedAngle;
+			pthread_mutex_unlock(&mutDataAngle);
+			sleep(PERIOD);
+		} else {
+			printf("Task %d could not wait semaphore: %d\n", task_id, errno);
+		}
 	}
 }
 
@@ -228,29 +243,32 @@ void speed_worker(void * data) {
 	task_id   = ((thread_args_t*)data)->id;
 
 	while (1) {
-		switch (speedState) {
-			case VIT0:
-				pthread_mutex_lock(&mutDataSpeed);
-				myData.speed = 0;
-				pthread_mutex_unlock(&mutDataSpeed);
-				break;
-			case VIT30:
-				pthread_mutex_lock(&mutDataSpeed);
-				myData.speed = 30;
-				pthread_mutex_unlock(&mutDataSpeed);
-				break;
-			case VIT50:
-				pthread_mutex_lock(&mutDataSpeed);
-				myData.speed = 50;
-				pthread_mutex_unlock(&mutDataSpeed);
-				break;
-			default:
-				pthread_mutex_lock(&mutDataSpeed);
-				myData.speed = 0;
-				pthread_mutex_unlock(&mutDataSpeed);
-				break;
+		if (sem_wait(sync_sem) == 0) {
+			switch (speedState) {
+				case VIT0:
+					pthread_mutex_lock(&mutDataSpeed);
+					myData.speed = 0;
+					pthread_mutex_unlock(&mutDataSpeed);
+					break;
+				case VIT30:
+					pthread_mutex_lock(&mutDataSpeed);
+					myData.speed = 30;
+					pthread_mutex_unlock(&mutDataSpeed);
+					break;
+				case VIT50:
+					pthread_mutex_lock(&mutDataSpeed);
+					myData.speed = 50;
+					pthread_mutex_unlock(&mutDataSpeed);
+					break;
+				default:
+					pthread_mutex_lock(&mutDataSpeed);
+					myData.speed = 0;
+					pthread_mutex_unlock(&mutDataSpeed);
+					break;
+			}
+		} else {
+			printf("Task %d could not wait semaphore: %d\n", task_id, errno);
 		}
-		sleep(PERIOD);
 	}
 }
 
@@ -267,21 +285,22 @@ void currPos_worker(void * data) {
 
 	float deltaX, deltaY, dist;
 
-	while (1) { 
-
-		pthread_mutex_lock(&mutDataSpeed);
-		dist = 1000 * (myData.speed * (PERIOD/3600)) * 10;
-		pthread_mutex_unlock(&mutDataSpeed);
-		pthread_mutex_lock(&mutDataAngle);
-		deltaX = dist * cos(myData.angle * PI / 180);
-		deltaY = dist * sin(myData.angle * PI / 180);
-		pthread_mutex_unlock(&mutDataAngle);
-		pthread_mutex_lock(&mutDataCurrPos);
-		myData.currPos.x += deltaX;	
-		myData.currPos.y += deltaY;	
-		pthread_mutex_unlock(&mutDataCurrPos);	
-
-		sleep(PERIOD); // period
+	while (1) {
+		if (sem_wait(sync_sem) == 0) {
+			pthread_mutex_lock(&mutDataSpeed);
+			dist = 1000 * (myData.speed * (PERIOD/3600)) * 10;
+			pthread_mutex_unlock(&mutDataSpeed);
+			pthread_mutex_lock(&mutDataAngle);
+			deltaX = dist * cos(myData.angle * PI / 180);
+			deltaY = dist * sin(myData.angle * PI / 180);
+			pthread_mutex_unlock(&mutDataAngle);
+			pthread_mutex_lock(&mutDataCurrPos);
+			myData.currPos.x += deltaX;
+			myData.currPos.y += deltaY;
+			pthread_mutex_unlock(&mutDataCurrPos);
+		} else {
+			printf("Task %d could not wait semaphore: %d\n", task_id, errno);
+		}
 	}
 	return; 
 }	
@@ -314,58 +333,61 @@ void navControl_worker(void * data) {
 	coord_t currPos_local;
 
 	while(1) {
-		pthread_mutex_lock(&mutDataCurrPos);
-		currPos_local = myData.currPos;
-		pthread_mutex_unlock(&mutDataCurrPos);
-		switch(state) {
-			case GOTO_DEST:
-				speedState = VIT50;
-				if (lowBat) {
-					state = PRE_BATT_LOW;
-				} else {
-					if (destReached) {
-						// Destination atteinte donc on en génère une nouvelle
-						nb_destReached += 1;
-						pm.genDest(currPos_local, dest);
-						pm.genWp(currPos_local, dest, nextStep);
-						nb_stepReached = 0; // resetting this variable
-						destReached = false;
-					} else {	
-						// Étape atteinte ?
-						if (nextStepReached(currPos_local, nextStep)) {
-							nb_stepReached += 1;
-							// On génère la prochaine étape
+		if (sem_wait(sync_sem) == 0) {
+			pthread_mutex_lock(&mutDataCurrPos);
+			currPos_local = myData.currPos;
+			pthread_mutex_unlock(&mutDataCurrPos);
+			switch(state) {
+				case GOTO_DEST:
+					speedState = VIT50;
+					if (lowBat) {
+						state = PRE_BATT_LOW;
+					} else {
+						if (destReached) {
+							// Destination atteinte donc on en génère une nouvelle
+							nb_destReached += 1;
+							pm.genDest(currPos_local, dest);
 							pm.genWp(currPos_local, dest, nextStep);
+							nb_stepReached = 0; // resetting this variable
+							destReached = false;
 						} else {
-							// Sinon on met à jour l'angle
-							orderedAngle = getAngle(currPos_local, nextStep);
+							// Étape atteinte ?
+							if (nextStepReached(currPos_local, nextStep)) {
+								nb_stepReached += 1;
+								// On génère la prochaine étape
+								pm.genWp(currPos_local, dest, nextStep);
+							} else {
+								// Sinon on met à jour l'angle
+								orderedAngle = getAngle(currPos_local, nextStep);
+							}
 						}
 					}
-				}
-				break;
-			case PRE_BATT_LOW:
-				speedState = VIT30;
-				pm.getClosestStation(currPos_local, stationPos);
-				state = BATT_LOW;
-				break;
-			case BATT_LOW:
-				orderedAngle = getAngle(currPos_local, stationPos);
-				if (nextStepReached(currPos_local, stationPos))
-					state = CHARGING;
-				break;
-			case CHARGING:
-				speedState = VIT0;
-				inCharge = true;
-				if (highBat) {
-					// On genere une nouvelle etape a partir de la station
-					// avant de retourner à l'état GOTO_DEST
-					pm.genWp(currPos_local, dest, nextStep);
-					inCharge = false;
-					state = GOTO_DEST;
-				}
-				break;
+					break;
+				case PRE_BATT_LOW:
+					speedState = VIT30;
+					pm.getClosestStation(currPos_local, stationPos);
+					state = BATT_LOW;
+					break;
+				case BATT_LOW:
+					orderedAngle = getAngle(currPos_local, stationPos);
+					if (nextStepReached(currPos_local, stationPos))
+						state = CHARGING;
+					break;
+				case CHARGING:
+					speedState = VIT0;
+					inCharge = true;
+					if (highBat) {
+						// On genere une nouvelle etape a partir de la station
+						// avant de retourner à l'état GOTO_DEST
+						pm.genWp(currPos_local, dest, nextStep);
+						inCharge = false;
+						state = GOTO_DEST;
+					}
+					break;
+			}
+		} else {
+			printf("Task %d could not wait semaphore: %d\n", task_id, errno);
 		}
-	sleep(PERIOD);
 	}
 	return; 
 }
@@ -382,12 +404,15 @@ void destControl_worker(void * data) {
 
 	coord_t currPos_local;
 	while (1) {
-		pthread_mutex_lock(&mutDataCurrPos);
-		currPos_local = myData.currPos;
-		pthread_mutex_unlock(&mutDataCurrPos);	
-		if (nextStepReached(currPos_local, dest))
-			destReached = true;
-		sleep(0.1);
+		if (sem_wait(sync_sem) == 0) {
+			pthread_mutex_lock(&mutDataCurrPos);
+			currPos_local = myData.currPos;
+			pthread_mutex_unlock(&mutDataCurrPos);
+			if (nextStepReached(currPos_local, dest))
+				destReached = true;
+		} else {
+			printf("Task %d could not wait semaphore: %d\n", task_id, errno);
+		}
 	}
 	return; 
 }
@@ -413,36 +438,38 @@ void display_worker(void * data) {
 	double x, y;
 
 	while (1)	{
+		if (sem_wait(sync_sem) == 0) {
 
-		pthread_mutex_lock(&mutDataBattLevel);
-		bat = myData.battLevel;
-		pthread_mutex_unlock(&mutDataBattLevel);
+			pthread_mutex_lock(&mutDataBattLevel);
+			bat = myData.battLevel;
+			pthread_mutex_unlock(&mutDataBattLevel);
 
-		pthread_mutex_lock(&mutDataSpeed);
-		speed_local = myData.speed;
-		pthread_mutex_unlock(&mutDataSpeed);
+			pthread_mutex_lock(&mutDataSpeed);
+			speed_local = myData.speed;
+			pthread_mutex_unlock(&mutDataSpeed);
 
-		pthread_mutex_lock(&mutDataAngle);
-		angle_local = myData.angle;
-		pthread_mutex_unlock(&mutDataAngle);
+			pthread_mutex_lock(&mutDataAngle);
+			angle_local = myData.angle;
+			pthread_mutex_unlock(&mutDataAngle);
 
-		pthread_mutex_lock(&mutDataCurrPos);
-		x = myData.currPos.x;
-		y = myData.currPos.y;
-		pthread_mutex_unlock(&mutDataCurrPos);
+			pthread_mutex_lock(&mutDataCurrPos);
+			x = myData.currPos.x;
+			y = myData.currPos.y;
+			pthread_mutex_unlock(&mutDataCurrPos);
 
-		cout << "******************DISPLAY******************\n"
-		     << "battLevel: " << bat         << "%.\n"
-		     << "speed: "     << speed_local << "km/h        carState: " << getCarState(state) << "\n"
-		     << "angle: "     << angle_local << "°\n"
-		     << " currPos.x: " << setw(9) << x              << "  currPos.y: " << y              << "\n"
-		     << "nextStep.x: " << setw(9) << nextStep.x     << " nextStep.y: " << nextStep.y     << "\n"
-		     << "    dest.x: " << setw(9) << dest.x         << "     dest.y: " << dest.y         << "\n"
-		     << " station.x: " << setw(9) << stationPos.x   << "  station.y: " << stationPos.y   << "\n"
-			 << "   nb step: " << setw(9) << nb_stepReached << "    nb dest: " << nb_destReached << "\n"
-		     << "*******************************************" << endl;
-
-		sleep(1);
+			cout << "******************DISPLAY******************\n"
+				 << "battLevel: " << bat         << "%.\n"
+				 << "speed: "     << speed_local << "km/h        carState: " << getCarState(state) << "\n"
+				 << "angle: "     << angle_local << "°\n"
+				 << " currPos.x: " << setw(9) << x              << "  currPos.y: " << y              << "\n"
+				 << "nextStep.x: " << setw(9) << nextStep.x     << " nextStep.y: " << nextStep.y     << "\n"
+				 << "    dest.x: " << setw(9) << dest.x         << "     dest.y: " << dest.y         << "\n"
+				 << " station.x: " << setw(9) << stationPos.x   << "  station.y: " << stationPos.y   << "\n"
+				 << "   nb step: " << setw(9) << nb_stepReached << "    nb dest: " << nb_destReached << "\n"
+				 << "*******************************************" << endl;
+		} else {
+			printf("Task %d could not wait semaphore: %d\n", task_id, errno);
+		}
 	}
 	return; 
 }	
@@ -472,6 +499,7 @@ void * main_worker(void * data) {
 void init()
 {
 	// Valeurs initiales
+
 	speedState       = VIT0;
 	orderedAngle 	 = 0;
 	myData.battLevel = 13;
@@ -481,15 +509,25 @@ void init()
 	stationPos.x     = 0;
 	stationPos.y     = 0;
 	nb_stepReached   = 0;
-	nb_destReached   = 0;
+	nb_destReached   = -1; // car on l'incremente a l'initialisation
+
+
 
 	/* Initialize the semaphores */
-	if(0 != sem_init(&taskCamera_sync, 0, 0))
-		printf("Could not init semaphore taskCamera_sync: %d\n", errno); return;
-	if(0 != sem_init(&taskBattlow_sync, 0, 0))
-		printf("Could not init semaphore taskBattlow_sync: %d\n", errno); return;
-	if(0 != sem_init(&taskBatthigh_sync, 0, 0))
-		printf("Could not init semaphore taskBatthigh_sync: %d\n", errno); return;
+	if(0 != sem_init(&taskCamera_sync, 0, 0)) {
+		cout << "Could not init semaphore taskCamera_sync:" <<  errno << endl;
+		return;
+	}
+	if(0 != sem_init(&taskBattlow_sync, 0, 0)) {
+		printf("Could not init semaphore taskBattlow_sync: %d\n", errno);
+		return;
+	}
+	if(0 != sem_init(&taskBatthigh_sync, 0, 0)) {
+		printf("Could not init semaphore taskBatthigh_sync: %d\n", errno);
+		return;
+	}
+
+
 
 	struct timespec tp;
 	/* Get the start time */
@@ -497,6 +535,7 @@ void init()
 		printf("Could not get start time: %d\n", errno);
 		return;
 	}
+
 
 	sem_t * sem_syncs               = (sem_t *)calloc(THREAD_NUM, sizeof(sem_t)); // timer sync semaphores
 	pthread_t * pulseHandlers       = (pthread_t *)calloc(THREAD_NUM, sizeof(pthread_t)); // pulse handlers
@@ -522,20 +561,20 @@ void init()
 							   100,  // currPos_worker
 							   100,  // navControl_worker
 							   100,  // destControl_worker
-							   100}; // display_worker
+							   1000}; // display_worker
 
 	// priorités
-	int prios[THREAD_NUM] = {1,  // cameraControl_worker
-							 1,  // camera_worker
-							 1,  // battery_worker
-							 1,  // battLow_worker
-							 1,  // battHigh_worker
-							 1,  // angle_worker
-							 1,  // speed_worker
-							 1,  // currPos_worker
-							 1,  // navControl_worker
-							 1,  // destControl_worker
-							 1}; // display_worker
+	int prios[THREAD_NUM] = {4,  // cameraControl_worker
+							 3,  // camera_worker
+							 3,  // battery_worker
+							 2,  // battLow_worker
+							 2,  // battHigh_worker
+							 3,  // angle_worker
+							 3,  // speed_worker
+							 3,  // currPos_worker
+							 4,  // navControl_worker
+							 4,  // destControl_worker
+							 5}; // display_worker
 
 	int i;
 	for (i = 0; i < THREAD_NUM; ++i) {
