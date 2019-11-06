@@ -62,6 +62,168 @@ int main() {
 	return 0;
 }
 
+void init()
+{
+	// Valeurs initiales
+
+	speedState       = VIT0;
+	orderedAngle 	 = 0;
+	myData.battLevel = 13;
+	myData.currPos.x = 0;
+	myData.currPos.y = 0;
+	destReached      = true; // pour generer un destination initiale
+	stationPos.x     = 0;
+	stationPos.y     = 0;
+	nb_stepReached   = 0;
+	nb_destReached   = -1; // car on l'incremente a l'initialisation
+
+
+
+	/* Initialize the semaphores */
+	if(0 != sem_init(&taskCamera_sync, 0, 0)) {
+		cout << "Could not init semaphore taskCamera_sync:" <<  errno << endl;
+		return;
+	}
+	if(0 != sem_init(&taskBattlow_sync, 0, 0)) {
+		printf("Could not init semaphore taskBattlow_sync: %d\n", errno);
+		return;
+	}
+	if(0 != sem_init(&taskBatthigh_sync, 0, 0)) {
+		printf("Could not init semaphore taskBatthigh_sync: %d\n", errno);
+		return;
+	}
+
+
+
+	struct timespec tp;
+	/* Get the start time */
+	if(0 != clock_gettime(CLOCK_REALTIME, &tp)) {
+		printf("Could not get start time: %d\n", errno);
+		return;
+	}
+
+
+	sem_t * sem_syncs               = (sem_t *)calloc(THREAD_NUM, sizeof(sem_t)); // timer sync semaphores
+	pthread_t * pulseHandlers       = (pthread_t *)calloc(THREAD_NUM, sizeof(pthread_t)); // pulse handlers
+	struct sigevent * sigevents     = (struct sigevent *)calloc(THREAD_NUM, sizeof(struct sigevent));
+	struct itimerspec * itimerspecs = (struct itimerspec *)calloc(THREAD_NUM, sizeof(struct itimerspec));
+	timer_t * timers                = (timer_t *)calloc(THREAD_NUM, sizeof(timer_t));
+	thread_args_t * task_args       = (thread_args_t *)calloc(THREAD_NUM, sizeof(thread_args_t));
+	pthread_t * tid                 = (pthread_t *)calloc(THREAD_NUM, sizeof(pthread_t));
+	pthread_attr_t attrib;
+	struct sched_param mySchedParam;
+	pthread_attr_init (&attrib);
+	pthread_attr_setinheritsched (&attrib, PTHREAD_EXPLICIT_SCHED);
+	pthread_attr_setschedpolicy (&attrib, SCHED_FIFO);
+
+	// périodes
+	int periods[THREAD_NUM] = {100,  // cameraControl_worker
+							   PERIOD_CONT,  // camera_worker
+							   PERIOD_CONT,  // battery_worker
+							   100,  // battLow_worker
+							   100,  // battHigh_worker
+							   PERIOD_CONT,  // angle_worker
+							   PERIOD_CONT,  // speed_worker
+							   PERIOD_CONT,  // currPos_worker
+							   100,  // navControl_worker
+							   100,  // destControl_worker
+							   1000}; // display_worker
+
+	// priorités
+	int prios[THREAD_NUM] = {4,  // cameraControl_worker
+							 3,  // camera_worker
+							 3,  // battery_worker
+							 2,  // battLow_worker
+							 2,  // battHigh_worker
+							 3,  // angle_worker
+							 3,  // speed_worker
+							 3,  // currPos_worker
+							 4,  // navControl_worker
+							 4,  // destControl_worker
+							 5}; // display_worker
+
+	int i;
+	for (i = 0; i < THREAD_NUM; ++i) {
+		// Init semaphore
+		if (sem_init(&sem_syncs[i], 0, 0) != 0) {
+			printf("Could not get init semaphore %d: %d\n", i, errno);
+			return;
+		}
+		// Init thread args
+		task_args[i].id        = i;
+		task_args[i].semaphore = &sem_syncs[i];
+		task_args[i].starttime = tp.tv_sec;
+		task_args[i].chid      = ChannelCreate(0);
+		if(-1 == task_args[i].chid) {
+			/* Print error */
+			printf("Could not create channel: %d\n", errno);
+			return;
+		}
+		mySchedParam.sched_priority = prios[i];
+		pthread_attr_setschedparam(&attrib, &mySchedParam);
+		if (pthread_create(&tid[i], &attrib, main_worker, (void *)&task_args[i]) < 0) {
+			cout << "Thread " << i << " creation failed" << endl;
+			return;
+		}
+		mySchedParam.sched_priority = 1; // maximum priority
+		pthread_attr_setschedparam(&attrib, &mySchedParam);
+		if(0 != pthread_create(&pulseHandlers[i], &attrib,
+					           task_pulse_handler, (void *)&task_args[i])) {
+			printf("Could not create pulse thread: %d\n", errno);
+			return;
+		}
+		if(0 != init_timer(&sigevents[i], &itimerspecs[i], &timers[i],
+						   task_args[i].chid, periods[i])) {
+			printf("Could not create timer: %d\n", errno);
+			return;
+		}
+	}
+
+	sleep(60);
+	pm.dumpImage("./map.bmp");
+
+	// join des threads
+	for (i = 0; i < THREAD_NUM; ++i) {
+		if (pthread_join(tid[i], NULL) < 0)
+			cout << "Join failed for thread " << i << endl;
+		if (pthread_join(pulseHandlers[i], NULL) < 0)
+			cout << "Join failed for pulse thread " << i << endl;
+	}
+
+	// Free the arrays
+	free(sem_syncs);
+	free(pulseHandlers);
+	free(sigevents);
+	free(itimerspecs);
+	free(timers);
+	free(task_args);
+	free(tid);
+
+	return;
+}
+
+void * main_worker(void * data) {
+
+	int task_id = ((thread_args_t *)data)->id;
+
+	switch(task_id) {
+		case 0:  cameraControl_worker(data); break;
+		case 1:  camera_worker(data);        break;
+		case 2:  battery_worker(data);       break;
+		case 3:  battLow_worker(data);       break;
+		case 4:  battHigh_worker(data);      break;
+		case 5:  angle_worker(data);         break;
+		case 6:  speed_worker(data);         break;
+		case 7:  currPos_worker(data);       break;
+		case 8:  navControl_worker(data);    break;
+		case 9:  destControl_worker(data);   break;
+		case 10: display_worker(data);       break;
+		default: break;
+	}
+	return NULL;
+
+}
+
 void cameraControl_worker(void * data) {
 
 	sem_t* sync_sem;
@@ -471,167 +633,5 @@ void display_worker(void * data) {
 	}
 	return; 
 }	
-
-void * main_worker(void * data) {
-	
-	int task_id = ((thread_args_t *)data)->id;
-
-	switch(task_id) {
-		case 0:  cameraControl_worker(data); break ;
-		case 1:  camera_worker(data);        break ;
-		case 2:  battery_worker(data);       break ;
-		case 3:  battLow_worker(data);       break ;
-		case 4:  battHigh_worker(data);      break ;
-		case 5:  angle_worker(data);         break ;
-		case 6:  speed_worker(data);         break ;
-		case 7:  currPos_worker(data);       break ;
-		case 8:  navControl_worker(data);    break ;
-		case 9:  destControl_worker(data);   break ;
-		case 10: display_worker(data);       break ;
-		default: break;
-	}
-	return NULL;
-
-}
-
-void init()
-{
-	// Valeurs initiales
-
-	speedState       = VIT0;
-	orderedAngle 	 = 0;
-	myData.battLevel = 13;
-	myData.currPos.x = 0;
-	myData.currPos.y = 0;
-	destReached      = true; // pour generer un destination initiale
-	stationPos.x     = 0;
-	stationPos.y     = 0;
-	nb_stepReached   = 0;
-	nb_destReached   = -1; // car on l'incremente a l'initialisation
-
-
-
-	/* Initialize the semaphores */
-	if(0 != sem_init(&taskCamera_sync, 0, 0)) {
-		cout << "Could not init semaphore taskCamera_sync:" <<  errno << endl;
-		return;
-	}
-	if(0 != sem_init(&taskBattlow_sync, 0, 0)) {
-		printf("Could not init semaphore taskBattlow_sync: %d\n", errno);
-		return;
-	}
-	if(0 != sem_init(&taskBatthigh_sync, 0, 0)) {
-		printf("Could not init semaphore taskBatthigh_sync: %d\n", errno);
-		return;
-	}
-
-
-
-	struct timespec tp;
-	/* Get the start time */
-	if(0 != clock_gettime(CLOCK_REALTIME, &tp)) {
-		printf("Could not get start time: %d\n", errno);
-		return;
-	}
-
-
-	sem_t * sem_syncs               = (sem_t *)calloc(THREAD_NUM, sizeof(sem_t)); // timer sync semaphores
-	pthread_t * pulseHandlers       = (pthread_t *)calloc(THREAD_NUM, sizeof(pthread_t)); // pulse handlers
-	struct sigevent * sigevents     = (struct sigevent *)calloc(THREAD_NUM, sizeof(struct sigevent));
-	struct itimerspec * itimerspecs = (struct itimerspec *)calloc(THREAD_NUM, sizeof(struct itimerspec));
-	timer_t * timers                = (timer_t *)calloc(THREAD_NUM, sizeof(timer_t));
-	thread_args_t * task_args       = (thread_args_t *)calloc(THREAD_NUM, sizeof(thread_args_t));
-	pthread_t * tid                 = (pthread_t *)calloc(THREAD_NUM, sizeof(pthread_t));
-	pthread_attr_t attrib;
-	struct sched_param mySchedParam;
-	pthread_attr_init (&attrib);
-	pthread_attr_setinheritsched (&attrib, PTHREAD_EXPLICIT_SCHED);
-	pthread_attr_setschedpolicy (&attrib, SCHED_FIFO);
-
-	// périodes
-	int periods[THREAD_NUM] = {100,  // cameraControl_worker
-							   PERIOD_CONT,  // camera_worker
-							   PERIOD_CONT,  // battery_worker
-							   100,  // battLow_worker
-							   100,  // battHigh_worker
-							   PERIOD_CONT,  // angle_worker
-							   PERIOD_CONT,  // speed_worker
-							   PERIOD_CONT,  // currPos_worker
-							   100,  // navControl_worker
-							   100,  // destControl_worker
-							   1000}; // display_worker
-
-	// priorités
-	int prios[THREAD_NUM] = {4,  // cameraControl_worker
-							 3,  // camera_worker
-							 3,  // battery_worker
-							 2,  // battLow_worker
-							 2,  // battHigh_worker
-							 3,  // angle_worker
-							 3,  // speed_worker
-							 3,  // currPos_worker
-							 4,  // navControl_worker
-							 4,  // destControl_worker
-							 5}; // display_worker
-
-	int i;
-	for (i = 0; i < THREAD_NUM; ++i) {
-		// Init semaphore
-		if (sem_init(&sem_syncs[i], 0, 0) != 0) {
-			printf("Could not get init semaphore %d: %d\n", i, errno);
-			return;
-		}
-		// Init thread args
-		task_args[i].id        = i;
-		task_args[i].semaphore = &sem_syncs[i];
-		task_args[i].starttime = tp.tv_sec;
-		task_args[i].chid      = ChannelCreate(0);
-		if(-1 == task_args[i].chid) {
-			/* Print error */
-			printf("Could not create channel: %d\n", errno);
-			return;
-		}
-		mySchedParam.sched_priority = prios[i];
-		pthread_attr_setschedparam(&attrib, &mySchedParam);
-		if (pthread_create(&tid[i], &attrib, main_worker, (void *)&task_args[i]) < 0) {
-			cout << "Thread " << i << " creation failed" << endl;
-			return;
-		}
-		mySchedParam.sched_priority = 1; // maximum priority
-		pthread_attr_setschedparam(&attrib, &mySchedParam);
-		if(0 != pthread_create(&pulseHandlers[i], &attrib,
-					           task_pulse_handler, (void *)&task_args[i])) {
-			printf("Could not create pulse thread: %d\n", errno);
-			return;
-		}
-		if(0 != init_timer(&sigevents[i], &itimerspecs[i], &timers[i],
-						   task_args[i].chid, periods[i])) {
-			printf("Could not create timer: %d\n", errno);
-			return;
-		}
-	}
-
-	sleep(60);
-	pm.dumpImage("./map.bmp");
-
-	// join des threads
-	for (i = 0; i < THREAD_NUM; ++i) {
-		if (pthread_join(tid[i], NULL) < 0)
-			cout << "Join failed for thread " << i << endl;
-		if (pthread_join(pulseHandlers[i], NULL) < 0)
-			cout << "Join failed for pulse thread " << i << endl;
-	}
-
-	// Free the arrays
-	free(sem_syncs);
-	free(pulseHandlers);
-	free(sigevents);
-	free(itimerspecs);
-	free(timers);
-	free(task_args);
-	free(tid);
-
-	return;
-}
 
 /* vim: set ts=4 sw=4 tw=90 noet :*/

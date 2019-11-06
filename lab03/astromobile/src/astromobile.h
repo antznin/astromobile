@@ -5,6 +5,20 @@
 
 void init();
 
+// Taches
+void * main_worker(void * data); // tache principale
+void cameraControl_worker(void * data);
+void camera_worker(void * data);
+void battery_worker(void * data);
+void battLow_worker(void * data);
+void battHigh_worker(void * data);
+void angle_worker(void * data);
+void speed_worker(void * data);
+void currPos_worker(void * data);
+void navControl_worker(void * data);
+void destControl_worker(void * data);
+void display_worker(void * data);
+
 #define THREAD_NUM 11
 
 // periode pour les threads continus
