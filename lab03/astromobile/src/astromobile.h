@@ -18,11 +18,12 @@ void currPos_worker(void * data);
 void navControl_worker(void * data);
 void destControl_worker(void * data);
 void display_worker(void * data);
+void stepControl_worker(void * data);
 
-#define THREAD_NUM 11
+#define THREAD_NUM 12
 
 // periode pour les threads continus
-#define PERIOD_CONT 100
+#define PERIOD_BASE 200
 
 #define PI 3.14159265359
 
