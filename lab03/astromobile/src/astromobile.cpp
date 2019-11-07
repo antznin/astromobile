@@ -69,7 +69,7 @@ void init()
 
 	speedState       = VIT0;
 	orderedAngle 	 = 0;
-	myData.battLevel = 13;
+	myData.battLevel = 11;
 	myData.currPos.x = 0;
 	myData.currPos.y = 0;
 	destReached      = true; // pour generer un destination initiale
@@ -77,6 +77,8 @@ void init()
 	stationPos.y     = 0;
 	nb_stepReached   = 0;
 	nb_destReached   = -1; // car on l'incremente a l'initialisation
+	nextStep.x = 42000; nextStep.y = 42000; // dummy values pour pas qu'on
+									        // atteigne une etape au debut
 
 
 
@@ -119,7 +121,7 @@ void init()
 
 	// périodes
 
-	int period_ajusted = PERIOD_BASE / SIMU_ACCEL;
+	int period_ajusted = PERIOD_BASE;
 	cout << period_ajusted << endl;
 
 	int periods[THREAD_NUM] = {100,  // cameraControl_worker
@@ -310,14 +312,14 @@ void battery_worker(void * data) {
 		if (sem_wait(sync_sem) == 0) {
 			if (inCharge)	{
 				pthread_mutex_lock(&mutDataBattLevel);
-				myData.battLevel += CONST_CHARGE;
+				myData.battLevel += (float)CONST_CHARGE * (float)((float)PERIOD_BASE / 1000);
 				pthread_mutex_unlock(&mutDataBattLevel);
 			}
 			pthread_mutex_lock(&mutDataSpeed);
 			speed_local = myData.speed;
 			pthread_mutex_unlock(&mutDataSpeed);
 			pthread_mutex_lock(&mutDataBattLevel);
-			myData.battLevel -= (float)(COEFF_DECHARGE * speed_local + CONST_DECHARGE) * (float)((float)PERIOD_BASE/1000);
+			myData.battLevel -= (float)(COEFF_DECHARGE * speed_local + CONST_DECHARGE) * (float)((float)PERIOD_BASE/1000) * SIMU_ACCEL;
 			batt_local = myData.battLevel;
 			pthread_mutex_unlock(&mutDataBattLevel);
 			if (batt_local <= 10)	{
@@ -484,12 +486,9 @@ void currPos_worker(void * data) {
 
 float delta_prev = 0;
 
-bool nextStepReached(coord_t currPos, coord_t nextStep) {
-	//cout << nextStep.x << " " << nextStep.y << " " << currPos.x << " " << currPos.y << "\n"
-	//	 << sqrt(pow((nextStep.x - currPos.x),2) + pow((nextStep.y - currPos.y),2)) << "\n"
-	//	 << "\n" << endl;
-	//delta_prev = sqrt(pow((nextStep.x - currPos.x),2) + pow((nextStep.y - currPos.y),2));
-	return (sqrt(pow((nextStep.x - currPos.x),2) + pow((nextStep.y - currPos.y),2)) <= 10);
+int nextStepReached(coord_t currPos, coord_t nextStep) {
+	int out = (sqrt(pow((nextStep.x - currPos.x),2) + pow((nextStep.y - currPos.y),2)) <= 10);
+	return out;
 }
 
 double getAngle(coord_t currPos, coord_t nextPos) {
@@ -674,7 +673,7 @@ void stepControl_worker(void * data) {
 			pthread_mutex_lock(&mutDataCurrPos);
 			currPos_local = myData.currPos;
 			pthread_mutex_unlock(&mutDataCurrPos);
-			if (nextStepReached(currPos_local, dest))
+			if (nextStepReached(currPos_local, nextStep))
 				stepReached = true;
 		} else {
 			printf("Task %d could not wait semaphore: %d\n", task_id, errno);
