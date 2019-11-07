@@ -16,8 +16,8 @@
 #ifndef UTILS_H
 #define UTILS_H
 
-#define TASK_01_BUDGET_PART 25
-#define TASK_2_BUDGET_PART  10
+#define CONTINUOUS_BUDGET_PART 30
+#define DISCREET_BUDGET_PART 30
 
 /* Pulse code definition */
 #define TASK_PULSE_CODE _PULSE_CODE_MINAVAIL
@@ -25,6 +25,10 @@
 int create_partitions(sched_aps_create_parms* partitions,
 					  sched_aps_parms* sched_param,
 					  unsigned int* sched_pol);
+int assign_partitions(sched_aps_join_parms* join_params,
+		             const sched_aps_create_parms* partitions,
+				     const pthread_t* threads,
+					 int thread_num);
 
 /* Thread arguments structure */
 typedef struct thread_arg {
@@ -43,6 +47,5 @@ void* task_pulse_handler(void* args);
 int32_t init_timer(struct sigevent* event, struct itimerspec* itime,
 		           timer_t* timer, const int32_t chanel_id,
 				   const uint32_t period);
-void* task_routine(void* args);
 
 #endif // UTILS_H

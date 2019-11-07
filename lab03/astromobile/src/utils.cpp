@@ -15,26 +15,79 @@ int create_partitions(sched_aps_create_parms* partitions,
 	   return EXIT_FAILURE;
 	}
 
-	/* Create the partition for task 0 and task 1 */
+	/* Create the partition for continuous tasks */
 	memset(&partitions[0], 0, sizeof(sched_aps_create_parms));
-	partitions[0].budget_percent     = TASK_01_BUDGET_PART;
-	partitions[0].max_budget_percent = TASK_01_BUDGET_PART;
-	partitions[0].name               = "TASK01_PART";
+	partitions[0].budget_percent     = CONTINUOUS_BUDGET_PART;
+	partitions[0].max_budget_percent = CONTINUOUS_BUDGET_PART;
+	partitions[0].name               = (char *)"CONTINUOUS_PART";
+
+//	printf("%d\n", SchedCtl(SCHED_APS_CREATE_PARTITION, &partitions[0], sizeof(sched_aps_create_parms)));
 
 	if(EOK != SchedCtl(SCHED_APS_CREATE_PARTITION, &partitions[0], sizeof(sched_aps_create_parms))) {
-		printf("Could not create partition 0.\n");
+		printf("Could not create partition 0: %d\n", errno);
+		perror("Error ");
 		return EXIT_FAILURE;
 	}
 
-	/* Create the partition for the buggy task */
+	/* Create the partition for the discreet tasks */
 	memset(&partitions[1], 0, sizeof(sched_aps_create_parms));
-	partitions[1].budget_percent     = TASK_2_BUDGET_PART;
-	partitions[1].max_budget_percent = TASK_2_BUDGET_PART;
-	partitions[1].name               = "TASK2_PART";
+	partitions[1].budget_percent     = DISCREET_BUDGET_PART;
+	partitions[1].max_budget_percent = DISCREET_BUDGET_PART;
+	partitions[1].name               = (char *)"DISCREET_PART";
 
 	if(EOK != SchedCtl(SCHED_APS_CREATE_PARTITION, &partitions[1], sizeof(sched_aps_create_parms))) {
-		printf("Could not create partition 1.\n");
+		printf("Could not create partition 1: %d\n", errno);
 		return EXIT_FAILURE;
+	}
+
+	return EXIT_SUCCESS;
+}
+
+int assign_partitions(sched_aps_join_parms* join_params,
+		             const sched_aps_create_parms* partitions,
+				     const pthread_t* threads,
+					 int thread_num ) {
+
+	/* Assigner les taches continues à une la partition 0 (4 taches) */
+	int i;
+	for (i = 0; i < 4; ++i) {
+		memset(&join_params[i], 0, sizeof(sched_aps_join_parms));
+		join_params[i].id  = partitions[0].id;
+		join_params[i].pid = getpid();
+	}
+
+	join_params[0].tid = threads[1]; // camera_worker
+	join_params[1].tid = threads[2]; // battery_worker
+	join_params[2].tid = threads[5]; // angle_worker
+	join_params[3].tid = threads[6]; // speed_worker
+
+	for (i = 0; i < 4; ++i) {
+		if(EOK != SchedCtl(SCHED_APS_JOIN_PARTITION, &join_params[i], sizeof(sched_aps_join_parms))) {
+			printf("Could not assign partition to thread\n");
+			return EXIT_FAILURE;
+		}
+	}
+
+	/* Assigner les autres taches (discretes) a la seconde partition */
+	for (i = 5; i < thread_num; ++i) {
+		memset(&join_params[i], 0, sizeof(sched_aps_join_parms));
+		join_params[i].id  = partitions[0].id;
+		join_params[i].pid = getpid();
+	}
+
+	join_params[4].tid  = threads[0];  // cameraControl_worker
+	join_params[5].tid  = threads[3];  // battLow_worker
+	join_params[6].tid  = threads[4];  // battHigh_worker
+	join_params[7].tid  = threads[7];  // currPos_worker
+	join_params[8].tid  = threads[8];  // navControl_worker
+	join_params[9].tid  = threads[9];  // destControl_worker
+	join_params[10].tid = threads[10]; // display_worker
+
+	for (i = 5; i < thread_num; ++i) {
+		if(EOK != SchedCtl(SCHED_APS_JOIN_PARTITION, &join_params[i], sizeof(sched_aps_join_parms))) {
+			printf("Could not assign partition to thread\n");
+			return EXIT_FAILURE;
+		}
 	}
 
 	return EXIT_SUCCESS;
@@ -76,43 +129,6 @@ int32_t init_timer(struct sigevent* event, struct itimerspec* itime,
 
 	/* Set the timer period */
 	return timer_settime(*timer, 0, itime, NULL);
-}
-
-/******************************************************************************
- * Task routine
- * Just a dummy task saying hello to the user.
- *****************************************************************************/
-void* task_routine(void* args) {
-
-	struct timespec tp;
-	sem_t*          sync_sem;
-	uint32_t        task_id;
-	uint32_t        starttime;
-	uint32_t        elapsed_time;
-
-	/* Get the arguments */
-	sync_sem  = ((thread_args_t*)args)->semaphore;
-	task_id   = ((thread_args_t*)args)->id;
-	starttime = ((thread_args_t*)args)->starttime;
-
-	/* Routine loop */
-	while(1<2) {
-		/* Wait for the pulse handler to release the semaphore */
-		if(0 == sem_wait(sync_sem)) {
-			/* Get the current time */
-			if(0 == clock_gettime(CLOCK_REALTIME, &tp)) {
-				elapsed_time = tp.tv_sec - starttime;
-				printf("Hello from task %d at %d\n", task_id, elapsed_time);
-			}
-			else {
-				/* Print error */
-				printf("Task %d could not get time: %d\n", task_id, errno);
-			}
-		}
-		else {
-			printf("Task %d could not wait semaphore: %d\n", task_id, errno);
-		}
-	}
 }
 
 /******************************************************************************

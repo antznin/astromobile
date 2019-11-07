@@ -77,8 +77,6 @@ void init()
 	nb_stepReached   = 0;
 	nb_destReached   = -1; // car on l'incremente a l'initialisation
 
-
-
 	/* Initialize the semaphores */
 	if(0 != sem_init(&taskCamera_sync, 0, 0)) {
 		cout << "Could not init semaphore taskCamera_sync:" <<  errno << endl;
@@ -93,8 +91,7 @@ void init()
 		return;
 	}
 
-
-
+	/* Time manager */
 	struct timespec tp;
 	/* Get the start time */
 	if(0 != clock_gettime(CLOCK_REALTIME, &tp)) {
@@ -103,6 +100,7 @@ void init()
 	}
 
 
+	/* Timers and threads */
 	sem_t * sem_syncs               = (sem_t *)calloc(THREAD_NUM, sizeof(sem_t)); // timer sync semaphores
 	pthread_t * pulseHandlers       = (pthread_t *)calloc(THREAD_NUM, sizeof(pthread_t)); // pulse handlers
 	struct sigevent * sigevents     = (struct sigevent *)calloc(THREAD_NUM, sizeof(struct sigevent));
@@ -117,17 +115,17 @@ void init()
 	pthread_attr_setschedpolicy (&attrib, SCHED_FIFO);
 
 	// périodes
-	int periods[THREAD_NUM] = {100,  // cameraControl_worker
+	int periods[THREAD_NUM] = {100,  		 // cameraControl_worker
 							   PERIOD_CONT,  // camera_worker
 							   PERIOD_CONT,  // battery_worker
-							   100,  // battLow_worker
-							   100,  // battHigh_worker
+							   100,  		 // battLow_worker
+							   100,  		 // battHigh_worker
 							   PERIOD_CONT,  // angle_worker
 							   PERIOD_CONT,  // speed_worker
-							   PERIOD_CONT,  // currPos_worker
-							   100,  // navControl_worker
-							   100,  // destControl_worker
-							   1000}; // display_worker
+							   100,  		 // currPos_worker
+							   100,  		 // navControl_worker
+							   100,  		 // destControl_worker
+							   1000}; 		 // display_worker
 
 	// priorités
 	int prios[THREAD_NUM] = {4,  // cameraControl_worker
@@ -179,7 +177,22 @@ void init()
 		}
 	}
 
-	sleep(60);
+	/* Partition data and parameters */
+	unsigned int sched_pol = SCHED_APS_SCHEDPOL_LIMIT_CPU_USAGE;
+	sched_aps_create_parms sched_partitions[2]; // Partition pour continu et discret
+	sched_aps_parms        sched_params[2];
+	sched_aps_join_parms   sched_join_param[THREAD_NUM];
+
+	/* Partitions creations */
+//	if(0 != create_partitions(sched_partitions, sched_params, &sched_pol)) {
+//		return;
+//	}
+	/* Assign threads to partitions */
+	if(0 != assign_partitions(sched_join_param, sched_partitions, tid, THREAD_NUM)) {
+		return;
+	}
+
+	sleep(180);
 	pm.dumpImage("./map.bmp");
 
 	// join des threads
