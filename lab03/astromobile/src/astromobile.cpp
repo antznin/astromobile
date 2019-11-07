@@ -41,6 +41,7 @@ coord_t stationPos;
 bool takePx;
 bool inCharge;
 bool destReached;
+bool stepReached;
 
 bool lowBat;
 bool highBat;
@@ -68,7 +69,7 @@ void init()
 
 	speedState       = VIT0;
 	orderedAngle 	 = 0;
-	myData.battLevel = 13;
+	myData.battLevel = 11;
 	myData.currPos.x = 0;
 	myData.currPos.y = 0;
 	destReached      = true; // pour generer un destination initiale
@@ -76,6 +77,8 @@ void init()
 	stationPos.y     = 0;
 	nb_stepReached   = 0;
 	nb_destReached   = -1; // car on l'incremente a l'initialisation
+	nextStep.x = 42000; nextStep.y = 42000; // dummy values pour pas qu'on
+									        // atteigne une etape au debut
 
 
 
@@ -117,17 +120,23 @@ void init()
 	pthread_attr_setschedpolicy (&attrib, SCHED_FIFO);
 
 	// périodes
+
+	int period_ajusted = PERIOD_BASE;
+	cout << period_ajusted << endl;
+
 	int periods[THREAD_NUM] = {100,  // cameraControl_worker
-							   PERIOD_CONT,  // camera_worker
-							   PERIOD_CONT,  // battery_worker
+							   period_ajusted,  // camera_worker
+							   period_ajusted,  // battery_worker
 							   100,  // battLow_worker
 							   100,  // battHigh_worker
-							   PERIOD_CONT,  // angle_worker
-							   PERIOD_CONT,  // speed_worker
-							   PERIOD_CONT,  // currPos_worker
-							   100,  // navControl_worker
-							   100,  // destControl_worker
-							   1000}; // display_worker
+							   period_ajusted,  // angle_worker
+							   period_ajusted,  // speed_worker
+							   period_ajusted,  // currPos_worker
+							   period_ajusted,  // navControl_worker
+							   period_ajusted,  // destControl_worker
+							   1000, // display_worker
+							   period_ajusted // stepControl_worker
+	};
 
 	// priorités
 	int prios[THREAD_NUM] = {4,  // cameraControl_worker
@@ -140,7 +149,9 @@ void init()
 							 3,  // currPos_worker
 							 4,  // navControl_worker
 							 4,  // destControl_worker
-							 5}; // display_worker
+							 5,  // display_worker
+							 4   // stepControl_worker
+	};
 
 	int i;
 	for (i = 0; i < THREAD_NUM; ++i) {
@@ -179,18 +190,25 @@ void init()
 		}
 	}
 
-	sleep(60);
+	sleep(SIMU_TIME); // genMap.h
 	pm.dumpImage("./map.bmp");
 
 	// join des threads
+		for (i = 0; i < THREAD_NUM; ++i) {
+			if (pthread_join(tid[i], NULL) < 0)
+				cout << "Join failed for thread " << i << endl;
+			if (pthread_join(pulseHandlers[i], NULL) < 0)
+				cout << "Join failed for pulse thread " << i << endl;
+		}
+
+	cout << "Canceling threads..." << endl;
 	for (i = 0; i < THREAD_NUM; ++i) {
-		if (pthread_join(tid[i], NULL) < 0)
-			cout << "Join failed for thread " << i << endl;
-		if (pthread_join(pulseHandlers[i], NULL) < 0)
-			cout << "Join failed for pulse thread " << i << endl;
+		pthread_cancel(tid[i]);
+		pthread_cancel(pulseHandlers[i]);
 	}
 
 	// Free the arrays
+	cout << "Freeing arrays" << endl;
 	free(sem_syncs);
 	free(pulseHandlers);
 	free(sigevents);
@@ -218,6 +236,7 @@ void * main_worker(void * data) {
 		case 8:  navControl_worker(data);    break;
 		case 9:  destControl_worker(data);   break;
 		case 10: display_worker(data);       break;
+		case 11: stepControl_worker(data);       break;
 		default: break;
 	}
 	return NULL;
@@ -293,14 +312,14 @@ void battery_worker(void * data) {
 		if (sem_wait(sync_sem) == 0) {
 			if (inCharge)	{
 				pthread_mutex_lock(&mutDataBattLevel);
-				myData.battLevel += CONST_CHARGE;
+				myData.battLevel += (float)CONST_CHARGE * (float)((float)PERIOD_BASE / 1000);
 				pthread_mutex_unlock(&mutDataBattLevel);
 			}
 			pthread_mutex_lock(&mutDataSpeed);
 			speed_local = myData.speed;
 			pthread_mutex_unlock(&mutDataSpeed);
 			pthread_mutex_lock(&mutDataBattLevel);
-			myData.battLevel -= (float)(COEFF_DECHARGE * speed_local + CONST_DECHARGE) * (float)((float)PERIOD_CONT/1000);
+			myData.battLevel -= (float)(COEFF_DECHARGE * speed_local + CONST_DECHARGE) * (float)((float)PERIOD_BASE/1000) * SIMU_ACCEL;
 			batt_local = myData.battLevel;
 			pthread_mutex_unlock(&mutDataBattLevel);
 			if (batt_local <= 10)	{
@@ -448,7 +467,7 @@ void currPos_worker(void * data) {
 	while (1) {
 		if (sem_wait(sync_sem) == 0) {
 			pthread_mutex_lock(&mutDataSpeed);
-			dist = SIMU_ACCEL * 1000 * myData.speed * PERIOD_CONT / (1000 * 3600) ;
+			dist = SIMU_ACCEL * 1000 * myData.speed * PERIOD_BASE / (1000 * 3600) ;
 			pthread_mutex_unlock(&mutDataSpeed);
 			pthread_mutex_lock(&mutDataAngle);
 			deltaX = dist * cos(myData.angle * PI / 180);
@@ -465,8 +484,11 @@ void currPos_worker(void * data) {
 	return; 
 }	
 
-bool nextStepReached(coord_t currPos, coord_t nextStep) {
-	return (sqrt(pow((nextStep.x - currPos.x),2) + pow((nextStep.y - currPos.y),2)) <= 10);
+float delta_prev = 0;
+
+int nextStepReached(coord_t currPos, coord_t nextStep) {
+	int out = (sqrt(pow((nextStep.x - currPos.x),2) + pow((nextStep.y - currPos.y),2)) <= 10);
+	return out;
 }
 
 double getAngle(coord_t currPos, coord_t nextPos) {
@@ -512,8 +534,9 @@ void navControl_worker(void * data) {
 							destReached = false;
 						} else {
 							// Étape atteinte ?
-							if (nextStepReached(currPos_local, nextStep)) {
+							if (stepReached) {
 								nb_stepReached += 1;
+								stepReached = false;
 								// On génère la prochaine étape
 								pm.genWp(currPos_local, dest, nextStep);
 							} else {
@@ -632,6 +655,31 @@ void display_worker(void * data) {
 		}
 	}
 	return; 
-}	
+}
+
+/********************************************************************
+* Ce thread determine quand la voiture est arrivée à la destination *
+********************************************************************/
+void stepControl_worker(void * data) {
+
+	sem_t* sync_sem;
+	uint32_t task_id;
+	sync_sem  = ((thread_args_t*)data)->semaphore;
+	task_id   = ((thread_args_t*)data)->id;
+
+	coord_t currPos_local;
+	while (1) {
+		if (sem_wait(sync_sem) == 0) {
+			pthread_mutex_lock(&mutDataCurrPos);
+			currPos_local = myData.currPos;
+			pthread_mutex_unlock(&mutDataCurrPos);
+			if (nextStepReached(currPos_local, nextStep))
+				stepReached = true;
+		} else {
+			printf("Task %d could not wait semaphore: %d\n", task_id, errno);
+		}
+	}
+	return;
+}
 
 /* vim: set ts=4 sw=4 tw=90 noet :*/
