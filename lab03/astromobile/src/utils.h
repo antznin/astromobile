@@ -1,6 +1,3 @@
-#ifndef TIMERS_H
-#define TIMERS_H
-
 #include <stdio.h>        /* printf */
 #include <stdlib.h>       /* EXIT_SUCCESS */
 #include <stdint.h>       /* int32_t uint32_t */
@@ -12,9 +9,22 @@
 #include <sys/netmgr.h>   /* ND_LOCAL_NODE */
 #include <time.h>         /* struct itimerspec struct timespec
                              timer_create tier_settime clock_gettime */
+#include <sys/sched_aps.h> /* sched_aps */
+#include <string.h>        /* memset */
+#include <unistd.h>        /* getpid */
+
+#ifndef UTILS_H
+#define UTILS_H
+
+#define TASK_01_BUDGET_PART 25
+#define TASK_2_BUDGET_PART  10
 
 /* Pulse code definition */
 #define TASK_PULSE_CODE _PULSE_CODE_MINAVAIL
+
+int create_partitions(sched_aps_create_parms* partitions,
+					  sched_aps_parms* sched_param,
+					  unsigned int* sched_pol);
 
 /* Thread arguments structure */
 typedef struct thread_arg {
@@ -35,4 +45,4 @@ int32_t init_timer(struct sigevent* event, struct itimerspec* itime,
 				   const uint32_t period);
 void* task_routine(void* args);
 
-#endif /* TIMERS_H */
+#endif // UTILS_H

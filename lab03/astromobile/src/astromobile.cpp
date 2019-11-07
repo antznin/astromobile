@@ -21,7 +21,7 @@
 #include <cmath>
 #include "genMap.h"
 #include "astromobile.h"
-#include "timers.h"
+#include "utils.h"
 
 using namespace std;
 

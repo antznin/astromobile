@@ -1,6 +1,44 @@
-#include "timers.h"
+#include "utils.h"
 
-#include <stdio.h>        /* printf */
+int create_partitions(sched_aps_create_parms* partitions,
+					  sched_aps_parms* sched_param,
+					  unsigned int* sched_pol) {
+
+
+	/* Set QNX partition to limit CPU budget */
+	memset(&sched_param[0], 0, sizeof(sched_aps_parms));
+	sched_param[0].windowsize_ms = -1;
+	sched_param[0].scheduling_policy_flagsp = sched_pol;
+
+	if (EOK != SchedCtl(SCHED_APS_SET_PARMS, &sched_param[0], sizeof(sched_aps_parms))) {
+	   printf("Could not set scheduler limit CPU usage (%d).\n", errno);
+	   return EXIT_FAILURE;
+	}
+
+	/* Create the partition for task 0 and task 1 */
+	memset(&partitions[0], 0, sizeof(sched_aps_create_parms));
+	partitions[0].budget_percent     = TASK_01_BUDGET_PART;
+	partitions[0].max_budget_percent = TASK_01_BUDGET_PART;
+	partitions[0].name               = "TASK01_PART";
+
+	if(EOK != SchedCtl(SCHED_APS_CREATE_PARTITION, &partitions[0], sizeof(sched_aps_create_parms))) {
+		printf("Could not create partition 0.\n");
+		return EXIT_FAILURE;
+	}
+
+	/* Create the partition for the buggy task */
+	memset(&partitions[1], 0, sizeof(sched_aps_create_parms));
+	partitions[1].budget_percent     = TASK_2_BUDGET_PART;
+	partitions[1].max_budget_percent = TASK_2_BUDGET_PART;
+	partitions[1].name               = "TASK2_PART";
+
+	if(EOK != SchedCtl(SCHED_APS_CREATE_PARTITION, &partitions[1], sizeof(sched_aps_create_parms))) {
+		printf("Could not create partition 1.\n");
+		return EXIT_FAILURE;
+	}
+
+	return EXIT_SUCCESS;
+}
 
 /******************************************************************************
  * Timer initialization routine
