@@ -114,31 +114,31 @@ void init()
 	pthread_attr_setinheritsched (&attrib, PTHREAD_EXPLICIT_SCHED);
 	pthread_attr_setschedpolicy (&attrib, SCHED_FIFO);
 
-	// périodes
-	int periods[THREAD_NUM] = {100,  		 // cameraControl_worker
-							   PERIOD_CONT,  // camera_worker
-							   PERIOD_CONT,  // battery_worker
-							   100,  		 // battLow_worker
-							   100,  		 // battHigh_worker
-							   PERIOD_CONT,  // angle_worker
-							   PERIOD_CONT,  // speed_worker
-							   100,  		 // currPos_worker
-							   100,  		 // navControl_worker
-							   100,  		 // destControl_worker
-							   1000}; 		 // display_worker
+	// périodes em ms
+	uint32_t periods[THREAD_NUM] = {3,  		 // cameraControl_worker
+							   	    3,  		 // camera_worker
+									5,  		 // battery_worker
+									3,  		 // battLow_worker
+									3,  		 // battHigh_worker
+									3,  		 // angle_worker
+									3,  		 // speed_worker
+									3,  		 // currPos_worker
+									3,  		 // navControl_worker
+									3,  		 // destControl_worker
+									1000}; 		 // display_worker
 
 	// priorités
-	int prios[THREAD_NUM] = {4,  // cameraControl_worker
-							 3,  // camera_worker
-							 3,  // battery_worker
-							 2,  // battLow_worker
-							 2,  // battHigh_worker
-							 3,  // angle_worker
-							 3,  // speed_worker
+	int prios[THREAD_NUM] = {2,  // cameraControl_worker
+							 4,  // camera_worker
+							 4,  // battery_worker
+							 3,  // battLow_worker
+							 3,  // battHigh_worker
+							 4,  // angle_worker
+							 4,  // speed_worker
 							 3,  // currPos_worker
-							 4,  // navControl_worker
-							 4,  // destControl_worker
-							 5}; // display_worker
+							 3,  // navControl_worker
+							 3,  // destControl_worker
+							 1}; // display_worker
 
 	int i;
 	for (i = 0; i < THREAD_NUM; ++i) {
@@ -152,6 +152,7 @@ void init()
 		task_args[i].semaphore = &sem_syncs[i];
 		task_args[i].starttime = tp.tv_sec;
 		task_args[i].chid      = ChannelCreate(0);
+		task_args[i].period    = periods[i];
 		if(-1 == task_args[i].chid) {
 			/* Print error */
 			printf("Could not create channel: %d\n", errno);
@@ -163,7 +164,7 @@ void init()
 			cout << "Thread " << i << " creation failed" << endl;
 			return;
 		}
-		mySchedParam.sched_priority = 1; // maximum priority
+		mySchedParam.sched_priority = 5; // maximum priority
 		pthread_attr_setschedparam(&attrib, &mySchedParam);
 		if(0 != pthread_create(&pulseHandlers[i], &attrib,
 					           task_pulse_handler, (void *)&task_args[i])) {
@@ -184,9 +185,9 @@ void init()
 	sched_aps_join_parms   sched_join_param[THREAD_NUM];
 
 	/* Partitions creations */
-	if(0 != create_partitions(sched_partitions, sched_params, &sched_pol)) {
-		return;
-	}
+//	if(0 != create_partitions(sched_partitions, sched_params, &sched_pol)) {
+//		return;
+//	}
 	/* Assign threads to partitions */
 	if(0 != assign_partitions(sched_join_param, sched_partitions, tid, THREAD_NUM)) {
 		return;
@@ -298,9 +299,10 @@ void camera_worker(void * data) {
 void battery_worker(void * data) {
 
 	sem_t* sync_sem;
-	uint32_t task_id;
+	uint32_t task_id, period;
 	sync_sem  = ((thread_args_t*)data)->semaphore;
 	task_id   = ((thread_args_t*)data)->id;
+	period    = ((thread_args_t*)data)->period;
 
 	float speed_local, batt_local;
 
@@ -308,14 +310,14 @@ void battery_worker(void * data) {
 		if (sem_wait(sync_sem) == 0) {
 			if (inCharge)	{
 				pthread_mutex_lock(&mutDataBattLevel);
-				myData.battLevel += CONST_CHARGE;
+				myData.battLevel += (float)CONST_CHARGE * period / 1000 ;
 				pthread_mutex_unlock(&mutDataBattLevel);
 			}
 			pthread_mutex_lock(&mutDataSpeed);
 			speed_local = myData.speed;
 			pthread_mutex_unlock(&mutDataSpeed);
 			pthread_mutex_lock(&mutDataBattLevel);
-			myData.battLevel -= (float)(COEFF_DECHARGE * speed_local + CONST_DECHARGE) * (float)((float)PERIOD_CONT/1000);
+			myData.battLevel -= SIMU_ACCEL * ((float)COEFF_DECHARGE * speed_local + (float)CONST_DECHARGE) * ((float)period/1000);
 			batt_local = myData.battLevel;
 			pthread_mutex_unlock(&mutDataBattLevel);
 			if (batt_local <= 10)	{
@@ -454,16 +456,17 @@ void speed_worker(void * data) {
 void currPos_worker(void * data) {
 
 	sem_t* sync_sem;
-	uint32_t task_id;
+	uint32_t task_id, period;
 	sync_sem  = ((thread_args_t*)data)->semaphore;
 	task_id   = ((thread_args_t*)data)->id;
+	period    = ((thread_args_t*)data)->period;
 
 	float deltaX, deltaY, dist;
 
 	while (1) {
 		if (sem_wait(sync_sem) == 0) {
 			pthread_mutex_lock(&mutDataSpeed);
-			dist = SIMU_ACCEL * 1000 * myData.speed * PERIOD_CONT / (1000 * 3600) ;
+			dist = SIMU_ACCEL * 1000 * myData.speed * period / (1000 * 3600) ;
 			pthread_mutex_unlock(&mutDataSpeed);
 			pthread_mutex_lock(&mutDataAngle);
 			deltaX = dist * cos(myData.angle * PI / 180);
