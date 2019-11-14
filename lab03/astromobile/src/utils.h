@@ -36,6 +36,7 @@ typedef struct thread_arg {
 	uint32_t id;        /* Task id */
 	uint32_t starttime; /* Global start time */
 	int32_t  chid;      /* Task channel id */
+	uint32_t period;    /* Task period */
 } thread_args_t;
 
 /* Pulse dumy structure */
