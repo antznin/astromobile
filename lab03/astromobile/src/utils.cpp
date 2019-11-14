@@ -71,7 +71,7 @@ int assign_partitions(sched_aps_join_parms* join_params,
 	/* Assigner les autres taches (discretes) a la seconde partition */
 	for (i = 5; i < thread_num; ++i) {
 		memset(&join_params[i], 0, sizeof(sched_aps_join_parms));
-		join_params[i].id  = partitions[0].id;
+		join_params[i].id  = partitions[1].id;
 		join_params[i].pid = getpid();
 	}
 

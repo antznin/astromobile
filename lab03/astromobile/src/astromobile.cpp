@@ -184,23 +184,25 @@ void init()
 	sched_aps_join_parms   sched_join_param[THREAD_NUM];
 
 	/* Partitions creations */
-//	if(0 != create_partitions(sched_partitions, sched_params, &sched_pol)) {
-//		return;
-//	}
+	if(0 != create_partitions(sched_partitions, sched_params, &sched_pol)) {
+		return;
+	}
 	/* Assign threads to partitions */
 	if(0 != assign_partitions(sched_join_param, sched_partitions, tid, THREAD_NUM)) {
 		return;
 	}
 
-	sleep(180);
+	sleep(SIMU_TIME);
 	pm.dumpImage("./map.bmp");
 
 	// join des threads
 	for (i = 0; i < THREAD_NUM; ++i) {
-		if (pthread_join(tid[i], NULL) < 0)
-			cout << "Join failed for thread " << i << endl;
-		if (pthread_join(pulseHandlers[i], NULL) < 0)
-			cout << "Join failed for pulse thread " << i << endl;
+//		if (pthread_join(tid[i], NULL) < 0)
+//			cout << "Join failed for thread " << i << endl;
+//		if (pthread_join(pulseHandlers[i], NULL) < 0)
+//			cout << "Join failed for pulse thread " << i << endl;
+		pthread_cancel(tid[i]);
+		pthread_cancel(pulseHandlers[i]);
 	}
 
 	// Free the arrays
