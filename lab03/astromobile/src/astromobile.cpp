@@ -55,6 +55,8 @@ sem_t taskCamera_sync;
 sem_t taskBattlow_sync;
 sem_t taskBatthigh_sync;
 
+FILE *trace_data;
+
 int main() {
 
 	init();
@@ -64,6 +66,12 @@ int main() {
 
 void init()
 {
+
+	if ((trace_data = fopen("./data.csv", "w")) == NULL) {
+		perror("Error while opening file");
+		return;
+	}
+
 	// Valeurs initiales
 
 	speedState       = VIT0;
@@ -99,7 +107,6 @@ void init()
 		return;
 	}
 
-
 	/* Timers and threads */
 	sem_t * sem_syncs               = (sem_t *)calloc(THREAD_NUM, sizeof(sem_t)); // timer sync semaphores
 	pthread_t * pulseHandlers       = (pthread_t *)calloc(THREAD_NUM, sizeof(pthread_t)); // pulse handlers
@@ -117,7 +124,7 @@ void init()
 	// périodes em ms
 	uint32_t periods[THREAD_NUM] = {3,  		 // cameraControl_worker
 							   	    3,  		 // camera_worker
-									5,  		 // battery_worker
+									3,  		 // battery_worker
 									3,  		 // battLow_worker
 									3,  		 // battHigh_worker
 									3,  		 // angle_worker
@@ -125,8 +132,9 @@ void init()
 									3,  		 // currPos_worker
 									3,  		 // navControl_worker
 									3,  		 // destControl_worker
-									1000}; 		 // display_worker
-
+									1000,		 // display_worker
+									10 		     // trace_worker
+	};
 	// priorités
 	int prios[THREAD_NUM] = {2,  // cameraControl_worker
 							 4,  // camera_worker
@@ -138,7 +146,9 @@ void init()
 							 3,  // currPos_worker
 							 3,  // navControl_worker
 							 3,  // destControl_worker
-							 1}; // display_worker
+							 1,  // display_worker
+							 1	 // trace_worker
+	};
 
 	int i;
 	for (i = 0; i < THREAD_NUM; ++i) {
@@ -206,6 +216,9 @@ void init()
 		pthread_cancel(pulseHandlers[i]);
 	}
 
+	// Close file
+	fclose(trace_data);
+
 	// Free the arrays
 	free(sem_syncs);
 	free(pulseHandlers);
@@ -234,6 +247,7 @@ void * main_worker(void * data) {
 		case 8:  navControl_worker(data);    break;
 		case 9:  destControl_worker(data);   break;
 		case 10: display_worker(data);       break;
+		case 11: trace_worker(data);         break;
 		default: break;
 	}
 	return NULL;
@@ -651,5 +665,37 @@ void display_worker(void * data) {
 	}
 	return; 
 }	
+
+void trace_worker(void * data) {
+
+	sem_t* sync_sem;
+	uint32_t task_id;
+	sync_sem  = ((thread_args_t*)data)->semaphore;
+	task_id   = ((thread_args_t*)data)->id;
+
+	float bat, speed_local, angle_local;
+	double x, y;
+
+	/* Time manager */
+	struct timespec tp;
+	/* Get the start time */
+	if(0 != clock_gettime(CLOCK_REALTIME, &tp)) {
+		printf("Could not get start time: %d\n", errno);
+		return;
+	}
+
+	long int starttime = tp.tv_nsec;
+
+	//long int starttime = tp.tv_nsec;
+
+	while (1)	{
+		if (sem_wait(sync_sem) == 0) {
+			clock_gettime(CLOCK_REALTIME, &tp);
+			cout << tp.tv_nsec - starttime << endl;
+		}
+	}
+
+	return;
+}
 
 /* vim: set ts=4 sw=4 tw=90 noet :*/
