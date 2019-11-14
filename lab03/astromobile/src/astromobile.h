@@ -18,12 +18,11 @@ void currPos_worker(void * data);
 void navControl_worker(void * data);
 void destControl_worker(void * data);
 void display_worker(void * data);
-void stepControl_worker(void * data);
 
-#define THREAD_NUM 12
+#define THREAD_NUM 11
 
 // periode pour les threads continus
-#define PERIOD_BASE 3
+#define PERIOD_CONT 100
 
 #define PI 3.14159265359
 
@@ -34,7 +33,7 @@ void stepControl_worker(void * data);
 #define MSG_PRI_MED  20
 #define MSG_PRI_HIGH 30
 
-#define CONST_CHARGE   5        // la batterie doit gagner 5% par seconde
+#define CONST_CHARGE 5          // la batterie gagne 5% par période
 #define COEFF_DECHARGE 0.0001   // 1/(60*30)
 								// la batterie perd coeff*vitesse par
 								// minute en décharge, donc 1% perdu par minute quand elle roule a 30
