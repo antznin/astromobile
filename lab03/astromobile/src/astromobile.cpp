@@ -59,6 +59,8 @@ sem_t taskBatthigh_sync;
 
 FILE *trace_data;
 
+coord_t obstacle;
+
 int main() {
 
 	init();
@@ -78,7 +80,7 @@ void init()
 
 	speedState       = VIT0;
 	orderedAngle 	 = 0;
-	myData.battLevel = 13;
+	myData.battLevel = 80;
 	myData.currPos.x = 0;
 	myData.currPos.y = 0;
 	destReached      = true; // pour generer un destination initiale
@@ -86,6 +88,8 @@ void init()
 	stationPos.y     = 0;
 	nb_stepReached   = 0;
 	nb_destReached   = -1; // car on l'incremente a l'initialisation
+	obstacle.x = 0;
+	obstacle.y = 0;
 
 	/* Initialize the semaphores */
 	if(0 != sem_init(&taskCamera_sync, 0, 0)) {
@@ -521,6 +525,9 @@ void navControl_worker(void * data) {
 	task_id   = ((thread_args_t*)data)->id;
 
 	coord_t currPos_local;
+	auto start = std::chrono::system_clock::now();
+	double duration;
+	bool has_obstacle = false;
 
 	while(1) {
 		if (sem_wait(sync_sem) == 0) {
@@ -530,8 +537,14 @@ void navControl_worker(void * data) {
 			switch(state) {
 				case GOTO_DEST:
 					speedState = VIT50;
+					// Critique donc on teste en premier
+					if (has_obstacle && nextStepReached(currPos_local, obstacle)) {
+						state = PRE_OBSTACLE;
+						break;
+					}
 					if (lowBat) {
 						state = PRE_BATT_LOW;
+						break;
 					} else {
 						if (destReached) {
 							// Destination atteinte donc on en génère une nouvelle
@@ -546,6 +559,10 @@ void navControl_worker(void * data) {
 								nb_stepReached += 1;
 								// On génère la prochaine étape
 								pm.genWp(currPos_local, dest, nextStep);
+								// Generation aleatoire d'obstacle
+								has_obstacle = pm.genObstacle(currPos_local,
+															  dest,
+															  obstacle);
 							} else {
 								// Sinon on met à jour l'angle
 								orderedAngle = getAngle(currPos_local, nextStep);
@@ -572,6 +589,20 @@ void navControl_worker(void * data) {
 						pm.genWp(currPos_local, dest, nextStep);
 						inCharge = false;
 						state = GOTO_DEST;
+					}
+					break;
+				case PRE_OBSTACLE:
+					speedState = VIT0;
+					start = std::chrono::system_clock::now();
+					state = OBSTACLE;
+					break;
+				case OBSTACLE:
+					auto end = std::chrono::system_clock::now();
+					std::chrono::duration<double> elapsed_time = end - start;
+					// délai de 5 secondes avant de repartir
+					if (elapsed_time.count() > 5) {
+						state = GOTO_DEST;
+						has_obstacle = false;
 					}
 					break;
 			}
@@ -613,6 +644,8 @@ char * getCarState(enum carState state) {
 	  case PRE_BATT_LOW: return (char *)"PRE_BATT_LOW";
 	  case BATT_LOW:     return (char *)"BATT_LOW";
 	  case CHARGING:     return (char *)"CHARGING";
+	  case PRE_OBSTACLE: return (char *)"PRE_OBSTACLE";
+	  case OBSTACLE:     return (char *)"OBSTACLE";
 	  default:           return (char *)"UNKNOWN";
    }
 }
@@ -651,11 +684,12 @@ void display_worker(void * data) {
 				 << "battLevel: " << bat         << "%.\n"
 				 << "speed: "     << speed_local << "km/h        carState: " << getCarState(state) << "\n"
 				 << "angle: "     << angle_local << "°\n"
-				 << " currPos.x: " << setw(9) << x              << "  currPos.y: " << y              << "\n"
-				 << "nextStep.x: " << setw(9) << nextStep.x     << " nextStep.y: " << nextStep.y     << "\n"
-				 << "    dest.x: " << setw(9) << dest.x         << "     dest.y: " << dest.y         << "\n"
-				 << " station.x: " << setw(9) << stationPos.x   << "  station.y: " << stationPos.y   << "\n"
-				 << "   nb step: " << setw(9) << nb_stepReached << "    nb dest: " << nb_destReached << "\n"
+				 << " currPos.x: "  << setw(9) << x              << "  currPos.y: "  << y              << "\n"
+				 << "nextStep.x: "  << setw(9) << nextStep.x     << " nextStep.y: "  << nextStep.y     << "\n"
+				 << "    dest.x: "  << setw(9) << dest.x         << "     dest.y: "  << dest.y         << "\n"
+				 << " station.x: "  << setw(9) << stationPos.x   << "  station.y: "  << stationPos.y   << "\n"
+				 << " obstacle.x: " << setw(9) << obstacle.x     << "  obstacle.y: " << obstacle.y     << "\n"
+				 << "   nb step: "  << setw(9) << nb_stepReached << "    nb dest: "  << nb_destReached << "\n"
 				 << "*******************************************" << endl;
 		} else {
 			printf("Task %d could not wait semaphore: %d\n", task_id, errno);

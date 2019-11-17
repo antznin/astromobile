@@ -48,7 +48,7 @@ struct physicsData {
 };
 
 // État de la machine pour la machine à états
-enum carState {GOTO_DEST, PRE_BATT_LOW, BATT_LOW, CHARGING};
+enum carState {GOTO_DEST, PRE_BATT_LOW, BATT_LOW, CHARGING, PRE_OBSTACLE, OBSTACLE};
 
 // vitesses possibles
 enum speeds {VIT0, VIT30, VIT50};
