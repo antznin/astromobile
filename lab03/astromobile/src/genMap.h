@@ -1,8 +1,8 @@
 #ifndef __GEN_MAP_H__
 #define __GEN_MAP_H__
 
-#define SIMU_ACCEL 100
-#define SIMU_TIME 120 // seconds
+#define SIMU_ACCEL 30
+#define SIMU_TIME 60 // seconds
 
 #define IMG_W_PX 7000
 #define IMG_H_PX 7000

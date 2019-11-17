@@ -19,6 +19,8 @@
 #include <math.h>
 #include <iomanip>  // needed to use manipulators with parameters (precision, width)
 #include <cmath>
+#include <ctime>
+#include <chrono>
 #include "genMap.h"
 #include "astromobile.h"
 #include "utils.h"
@@ -67,7 +69,7 @@ int main() {
 void init()
 {
 
-	if ((trace_data = fopen("./data.csv", "w")) == NULL) {
+	if ((trace_data = fopen("./data.csv", "w+")) == NULL) {
 		perror("Error while opening file");
 		return;
 	}
@@ -133,7 +135,7 @@ void init()
 									3,  		 // navControl_worker
 									3,  		 // destControl_worker
 									1000,		 // display_worker
-									10 		     // trace_worker
+									100 		 // trace_worker
 	};
 	// priorités
 	int prios[THREAD_NUM] = {2,  // cameraControl_worker
@@ -208,10 +210,6 @@ void init()
 
 	// join des threads
 	for (i = 0; i < THREAD_NUM; ++i) {
-//		if (pthread_join(tid[i], NULL) < 0)
-//			cout << "Join failed for thread " << i << endl;
-//		if (pthread_join(pulseHandlers[i], NULL) < 0)
-//			cout << "Join failed for pulse thread " << i << endl;
 		pthread_cancel(tid[i]);
 		pthread_cancel(pulseHandlers[i]);
 	}
@@ -669,29 +667,25 @@ void display_worker(void * data) {
 void trace_worker(void * data) {
 
 	sem_t* sync_sem;
-	uint32_t task_id;
 	sync_sem  = ((thread_args_t*)data)->semaphore;
-	task_id   = ((thread_args_t*)data)->id;
 
-	float bat, speed_local, angle_local;
-	double x, y;
-
-	/* Time manager */
-	struct timespec tp;
-	/* Get the start time */
-	if(0 != clock_gettime(CLOCK_REALTIME, &tp)) {
-		printf("Could not get start time: %d\n", errno);
-		return;
-	}
-
-	long int starttime = tp.tv_nsec;
-
-	//long int starttime = tp.tv_nsec;
+	auto start = std::chrono::system_clock::now();
 
 	while (1)	{
 		if (sem_wait(sync_sem) == 0) {
-			clock_gettime(CLOCK_REALTIME, &tp);
-			cout << tp.tv_nsec - starttime << endl;
+			auto end = std::chrono::system_clock::now();
+			std::chrono::duration<double> elapsed_time = end - start;
+			// Pas de mutex car pas besoin de précision
+			fprintf(trace_data,
+					"%f,%f,%f,%f,%f,%f,%d,%d\n",
+					elapsed_time.count(),
+					myData.battLevel,
+					myData.speed,
+					myData.angle,
+					myData.currPos.x,
+					myData.currPos.y,
+					nb_stepReached,
+					nb_destReached);
 		}
 	}
 
