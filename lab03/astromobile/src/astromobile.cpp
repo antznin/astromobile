@@ -499,8 +499,8 @@ void currPos_worker(void * data) {
 	return; 
 }	
 
-bool nextStepReached(coord_t currPos, coord_t nextStep) {
-	return (sqrt(pow((nextStep.x - currPos.x),2) + pow((nextStep.y - currPos.y),2)) <= 10);
+bool closeTo(coord_t currPos, coord_t nextStep, int dist) {
+	return (sqrt(pow((nextStep.x - currPos.x),2) + pow((nextStep.y - currPos.y),2)) <= dist);
 }
 
 double getAngle(coord_t currPos, coord_t nextPos) {
@@ -537,7 +537,7 @@ void navControl_worker(void * data) {
 				case GOTO_DEST:
 					speedState = VIT50;
 					// Critique donc on teste en premier
-					if (has_obstacle && nextStepReached(currPos_local, obstacle)) {
+					if (has_obstacle && closeTo(currPos_local, obstacle, DIST_OBSTACLE)) {
 						state = PRE_OBSTACLE;
 						break;
 					}
@@ -554,7 +554,7 @@ void navControl_worker(void * data) {
 							destReached = false;
 						} else {
 							// Étape atteinte ?
-							if (nextStepReached(currPos_local, nextStep)) {
+							if (closeTo(currPos_local, nextStep, DIST_STEP)) {
 								nb_stepReached += 1;
 								// On génère la prochaine étape
 								pm.genWp(currPos_local, dest, nextStep);
@@ -578,11 +578,11 @@ void navControl_worker(void * data) {
 					break;
 				case BATT_LOW:
 					orderedAngle = getAngle(currPos_local, stationPos);
-					if (has_obstacle && nextStepReached(currPos_local, obstacle)) {
+					if (has_obstacle && closeTo(currPos_local, obstacle, DIST_OBSTACLE)) {
 						state = PRE_OBSTACLE;
 						break;
 					}
-					if (nextStepReached(currPos_local, stationPos))
+					if (closeTo(currPos_local, stationPos, DIST_STEP))
 						state = CHARGING;
 					break;
 				case CHARGING:
@@ -637,7 +637,7 @@ void destControl_worker(void * data) {
 			pthread_mutex_lock(&mutDataCurrPos);
 			currPos_local = myData.currPos;
 			pthread_mutex_unlock(&mutDataCurrPos);
-			if (nextStepReached(currPos_local, dest))
+			if (closeTo(currPos_local, dest, DIST_STEP))
 				destReached = true;
 		} else {
 			printf("Task %d could not wait semaphore: %d\n", task_id, errno);

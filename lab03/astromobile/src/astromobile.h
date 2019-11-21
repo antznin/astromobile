@@ -40,6 +40,9 @@ void trace_worker(void * data);
 								// minute en décharge, donc 1% perdu par minute quand elle roule a 30
 #define CONST_DECHARGE 0.001666	// 1/(60*10)
 
+#define DIST_STEP 10
+#define DIST_OBSTACLE 5
+
 struct physicsData {
 	float speed;
 	float battLevel;
