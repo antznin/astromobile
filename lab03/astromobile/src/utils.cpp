@@ -69,7 +69,7 @@ int assign_partitions(sched_aps_join_parms* join_params,
 	}
 
 	/* Assigner les autres taches (discretes) a la seconde partition */
-	for (i = 5; i < thread_num; ++i) {
+	for (i = 4; i < thread_num; ++i) {
 		memset(&join_params[i], 0, sizeof(sched_aps_join_parms));
 		join_params[i].id  = partitions[1].id;
 		join_params[i].pid = getpid();
@@ -82,6 +82,7 @@ int assign_partitions(sched_aps_join_parms* join_params,
 	join_params[8].tid  = threads[8];  // navControl_worker
 	join_params[9].tid  = threads[9];  // destControl_worker
 	join_params[10].tid = threads[10]; // display_worker
+	join_params[11].tid = threads[11]; // trace_worker
 
 	for (i = 5; i < thread_num; ++i) {
 		if(EOK != SchedCtl(SCHED_APS_JOIN_PARTITION, &join_params[i], sizeof(sched_aps_join_parms))) {

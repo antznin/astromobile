@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import numpy as np
 
 data_f = open("./data.csv", "r")
 first = data_f.readline().replace("\n", "").split(",")
@@ -13,14 +14,36 @@ for line in data_f:
 
 data_f.close()
 
-print(data[0][0:50])
-print(data[1][0:50])
+def unique(seq1, seq2): 
+   checked1 = []
+   checked2 = []
+   last_el = None
+   for i in range(len(seq1)):
+       if seq1[i] != last_el:
+           checked1.append(seq1[i])
+           checked2.append(seq2[i])
+           last_el = seq1[i]
+   return checked1, checked2
 
-#f, (ax1, ax2) = plt.subplots(1, 2)
-plt.plot(data[0], data[1])
-plt.xlabel("$t$ ($s$)")
-plt.ylabel("Niveau de batterie (%)")
-plt.grid()
+print(data[12][3000])
+print(data[13][3000])
+
+
+for i in range(6,14,2):
+    data[i], data[i+1] = unique(data[i], data[i+1])
+
+print(data[12])
+
+# Map plotting
+plt.figure(1)
+plt.scatter(data[4], data[5],c=data[1], cmap='summer', label="Trajectoire")
+plt.colorbar()
+plt.plot(data[6], data[7], 'mo', markersize=4, label="Étapes")
+plt.plot(data[10][1:], data[11][1:], 'go', markersize=4, label="Obstacles")
+plt.plot(data[12][1:], data[13][1:], 'co', markersize=4, label="Stations")
+plt.plot(data[8], data[9], 'ro', markersize=5, label="Destinations")
+plt.xlabel("$x$")
+plt.ylabel("$y$")
 plt.legend()
-plt.savefig("./batt.jpg")
+plt.grid()
 plt.show()

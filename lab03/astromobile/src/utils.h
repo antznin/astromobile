@@ -17,7 +17,7 @@
 #define UTILS_H
 
 #define CONTINUOUS_BUDGET_PART 30
-#define DISCREET_BUDGET_PART 30
+#define DISCREET_BUDGET_PART 10
 
 /* Pulse code definition */
 #define TASK_PULSE_CODE _PULSE_CODE_MINAVAIL

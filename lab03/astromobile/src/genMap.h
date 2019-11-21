@@ -1,10 +1,10 @@
 #ifndef __GEN_MAP_H__
 #define __GEN_MAP_H__
 
-#define SIMU_ACCEL 5
+#define SIMU_ACCEL 50
 #define SIMU_TIME 60 // seconds
 
-#define PROBA_OBST 1 // probabilité d'avoir un obstacle
+#define PROBA_OBST 0.2 // probabilité d'avoir un obstacle
 
 #define IMG_W_PX 7000
 #define IMG_H_PX 7000

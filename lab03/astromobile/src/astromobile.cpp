@@ -80,7 +80,7 @@ void init()
 
 	speedState       = VIT0;
 	orderedAngle 	 = 0;
-	myData.battLevel = 80;
+	myData.battLevel = 12;
 	myData.currPos.x = 0;
 	myData.currPos.y = 0;
 	destReached      = true; // pour generer un destination initiale
@@ -128,18 +128,18 @@ void init()
 	pthread_attr_setschedpolicy (&attrib, SCHED_FIFO);
 
 	// périodes em ms
-	uint32_t periods[THREAD_NUM] = {3,  		 // cameraControl_worker
-							   	    3,  		 // camera_worker
-									3,  		 // battery_worker
-									3,  		 // battLow_worker
-									3,  		 // battHigh_worker
-									3,  		 // angle_worker
-									3,  		 // speed_worker
-									3,  		 // currPos_worker
-									3,  		 // navControl_worker
-									3,  		 // destControl_worker
+	uint32_t periods[THREAD_NUM] = {2,  		 // cameraControl_worker
+							   	    2,  		 // camera_worker
+									2,  		 // battery_worker
+									2,  		 // battLow_worker
+									2,  		 // battHigh_worker
+									2,  		 // angle_worker
+									2,  		 // speed_worker
+									2,  		 // currPos_worker
+									2,  		 // navControl_worker
+									2,  		 // destControl_worker
 									1000,		 // display_worker
-									100 		 // trace_worker
+									10   		 // trace_worker
 	};
 	// priorités
 	int prios[THREAD_NUM] = {2,  // cameraControl_worker
@@ -201,16 +201,16 @@ void init()
 	sched_aps_join_parms   sched_join_param[THREAD_NUM];
 
 	/* Partitions creations */
-//	if(0 != create_partitions(sched_partitions, sched_params, &sched_pol)) {
-//		return;
-//	}
+	if(0 != create_partitions(sched_partitions, sched_params, &sched_pol)) {
+		return;
+	}
 	/* Assign threads to partitions */
 	if(0 != assign_partitions(sched_join_param, sched_partitions, tid, THREAD_NUM)) {
 		return;
 	}
 
 	sleep(SIMU_TIME);
-	pm.dumpImage("./map.bmp");
+//	pm.dumpImage("./map.bmp");
 
 	// join des threads
 	for (i = 0; i < THREAD_NUM; ++i) {
@@ -526,7 +526,6 @@ void navControl_worker(void * data) {
 
 	coord_t currPos_local;
 	auto start = std::chrono::system_clock::now();
-	double duration;
 	bool has_obstacle = false;
 
 	while(1) {
@@ -561,7 +560,7 @@ void navControl_worker(void * data) {
 								pm.genWp(currPos_local, dest, nextStep);
 								// Generation aleatoire d'obstacle
 								has_obstacle = pm.genObstacle(currPos_local,
-															  dest,
+															  nextStep,
 															  obstacle);
 							} else {
 								// Sinon on met à jour l'angle
@@ -573,10 +572,16 @@ void navControl_worker(void * data) {
 				case PRE_BATT_LOW:
 					speedState = VIT30;
 					pm.getClosestStation(currPos_local, stationPos);
+					// Il peut également y avoir un obstacle sur le chemin de la station
+					pm.genObstacle(currPos_local, stationPos, obstacle);
 					state = BATT_LOW;
 					break;
 				case BATT_LOW:
 					orderedAngle = getAngle(currPos_local, stationPos);
+					if (has_obstacle && nextStepReached(currPos_local, obstacle)) {
+						state = PRE_OBSTACLE;
+						break;
+					}
 					if (nextStepReached(currPos_local, stationPos))
 						state = CHARGING;
 					break;
@@ -600,8 +605,11 @@ void navControl_worker(void * data) {
 					auto end = std::chrono::system_clock::now();
 					std::chrono::duration<double> elapsed_time = end - start;
 					// délai de 5 secondes avant de repartir
-					if (elapsed_time.count() > 5) {
-						state = GOTO_DEST;
+					if (elapsed_time.count() > 1) {
+						if (lowBat)
+							state = BATT_LOW;
+						else
+							state = GOTO_DEST;
 						has_obstacle = false;
 					}
 					break;
@@ -684,12 +692,12 @@ void display_worker(void * data) {
 				 << "battLevel: " << bat         << "%.\n"
 				 << "speed: "     << speed_local << "km/h        carState: " << getCarState(state) << "\n"
 				 << "angle: "     << angle_local << "°\n"
-				 << " currPos.x: "  << setw(9) << x              << "  currPos.y: "  << y              << "\n"
-				 << "nextStep.x: "  << setw(9) << nextStep.x     << " nextStep.y: "  << nextStep.y     << "\n"
-				 << "    dest.x: "  << setw(9) << dest.x         << "     dest.y: "  << dest.y         << "\n"
-				 << " station.x: "  << setw(9) << stationPos.x   << "  station.y: "  << stationPos.y   << "\n"
-				 << " obstacle.x: " << setw(9) << obstacle.x     << "  obstacle.y: " << obstacle.y     << "\n"
-				 << "   nb step: "  << setw(9) << nb_stepReached << "    nb dest: "  << nb_destReached << "\n"
+				 << "  currPos.x: "  << setw(9) << x              << "   currPos.y: "  << y              << "\n"
+				 << " nextStep.x: "  << setw(9) << nextStep.x     << "  nextStep.y: "  << nextStep.y     << "\n"
+				 << "     dest.x: "  << setw(9) << dest.x         << "      dest.y: "  << dest.y         << "\n"
+				 << "  station.x: "  << setw(9) << stationPos.x   << "   station.y: "  << stationPos.y   << "\n"
+				 << " obstacle.x: " << setw(9) << obstacle.x      << "  obstacle.y: " << obstacle.y     << "\n"
+				 << "    nb step: "  << setw(9) << nb_stepReached << "     nb dest: "  << nb_destReached << "\n"
 				 << "*******************************************" << endl;
 		} else {
 			printf("Task %d could not wait semaphore: %d\n", task_id, errno);
@@ -711,13 +719,21 @@ void trace_worker(void * data) {
 			std::chrono::duration<double> elapsed_time = end - start;
 			// Pas de mutex car pas besoin de précision
 			fprintf(trace_data,
-					"%f,%f,%f,%f,%f,%f,%d,%d\n",
-					elapsed_time.count(),
+					"%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%d,%d\n",
+					elapsed_time.count() * SIMU_ACCEL,
 					myData.battLevel,
 					myData.speed,
 					myData.angle,
 					myData.currPos.x,
 					myData.currPos.y,
+					nextStep.x,
+					nextStep.y,
+					dest.x,
+					dest.y,
+					obstacle.x,
+					obstacle.y,
+					stationPos.x,
+					stationPos.y,
 					nb_stepReached,
 					nb_destReached);
 		}

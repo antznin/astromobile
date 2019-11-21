@@ -26,23 +26,23 @@ template <typename T> int sgn(T val) {
 
 bool PathMap::genObstacle(coord_t actualPos, coord_t dest, coord_t &obstacle) {
 
-	float rand_f = rand() / RAND_MAX;
+	float rand_f = rand();
 
 	double posCourX = actualPos.x, posCourY = actualPos.y,
 		   destX = dest.x, destY = dest.y;
 
 	// Nouvel obstacle aleatoirement
-	if (rand_f < PROBA_OBST * RAND_MAX) {
+	if (rand_f < (float)PROBA_OBST * (float)RAND_MAX) {
 
 		// On genère un flottant compris dans [posCourX; destX]
 		obstacle.x = (double)posCourX +
 				((double)rand() / ((double)RAND_MAX / ((double)(destX - posCourX))));
 		// On déduit posObstY
-		double a = (obstacle.x - posCourX);
-		double b = (destX - posCourX);
-		double c = (destY - posCourY);
-		obstacle.y = posCourY
-				+ sgn(c) * sqrt(sqrt(pow(c,2) + pow(b,2)) * pow(b / a, 2) - pow(a,2));
+//		double a = (obstacle.x - posCourX);
+//		double b = (destX - posCourX);
+//		double c = (destY - posCourY);
+		double factor = (destX - posCourX) / (obstacle.x - posCourX);
+		obstacle.y = posCourY + sgn(destY - posCourY) * ((destY - posCourY) / factor);
 		return true;
 	} else {
 		return false;
