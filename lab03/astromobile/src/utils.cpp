@@ -84,7 +84,7 @@ int assign_partitions(sched_aps_join_parms* join_params,
 	join_params[10].tid = threads[10]; // display_worker
 	join_params[11].tid = threads[11]; // trace_worker
 
-	for (i = 5; i < thread_num; ++i) {
+	for (i = 4; i < thread_num; ++i) {
 		if(EOK != SchedCtl(SCHED_APS_JOIN_PARTITION, &join_params[i], sizeof(sched_aps_join_parms))) {
 			printf("Could not assign partition to thread\n");
 			return EXIT_FAILURE;
