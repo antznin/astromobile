@@ -129,12 +129,12 @@ void init()
 
 	// périodes em ms
 	uint32_t periods[THREAD_NUM] = {2,  		 // cameraControl_worker
-							   	    2,  		 // camera_worker
-									2,  		 // battery_worker
+							   	    100,  		 // camera_worker
+									100,  		 // battery_worker
 									2,  		 // battLow_worker
 									2,  		 // battHigh_worker
-									2,  		 // angle_worker
-									2,  		 // speed_worker
+									100,  		 // angle_worker
+									100,  		 // speed_worker
 									2,  		 // currPos_worker
 									2,  		 // navControl_worker
 									2,  		 // destControl_worker
@@ -156,6 +156,20 @@ void init()
 							 1	 // trace_worker
 	};
 
+	char procs[THREAD_NUM] = {0b0001,
+			  	  	  	  	  0b0001,
+							  0b0001,
+							  0b0001,
+							  0b0001,
+							  0b0001,
+							  0b0001,
+							  0b0001,
+							  0b0001,
+							  0b0001,
+							  0b0001,
+							  0b0001,
+	};
+
 	int i;
 	for (i = 0; i < THREAD_NUM; ++i) {
 		// Init semaphore
@@ -164,11 +178,12 @@ void init()
 			return;
 		}
 		// Init thread args
-		task_args[i].id        = i;
-		task_args[i].semaphore = &sem_syncs[i];
-		task_args[i].starttime = tp.tv_sec;
-		task_args[i].chid      = ChannelCreate(0);
-		task_args[i].period    = periods[i];
+		task_args[i].id           = i;
+		task_args[i].semaphore    = &sem_syncs[i];
+		task_args[i].starttime    = tp.tv_sec;
+		task_args[i].chid         = ChannelCreate(0);
+		task_args[i].period       = periods[i];
+		task_args[i].proc_runmask = procs[i];
 		if(-1 == task_args[i].chid) {
 			/* Print error */
 			printf("Could not create channel: %d\n", errno);

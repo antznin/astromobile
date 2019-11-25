@@ -16,8 +16,8 @@
 #ifndef UTILS_H
 #define UTILS_H
 
-#define CONTINUOUS_BUDGET_PART 30
-#define DISCREET_BUDGET_PART 10
+#define CONTINUOUS_BUDGET_PART 20
+#define DISCREET_BUDGET_PART 60
 
 /* Pulse code definition */
 #define TASK_PULSE_CODE _PULSE_CODE_MINAVAIL
@@ -37,6 +37,7 @@ typedef struct thread_arg {
 	uint32_t starttime; /* Global start time */
 	int32_t  chid;      /* Task channel id */
 	uint32_t period;    /* Task period */
+	char proc_runmask;       /* Thread processor */
 } thread_args_t;
 
 /* Pulse dumy structure */
