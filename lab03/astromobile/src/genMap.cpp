@@ -37,13 +37,13 @@ bool PathMap::genObstacle(coord_t actualPos, coord_t dest, coord_t &obstacle) {
 		// On genère un flottant compris dans [posCourX; destX]
 		obstacle.x = (double)posCourX +
 				((double)rand() / ((double)RAND_MAX / ((double)(destX - posCourX))));
-		// On déduit posObstY
-//		double a = (obstacle.x - posCourX);
-//		double b = (destX - posCourX);
-//		double c = (destY - posCourY);
+
 		double factor = (destX - posCourX) / (obstacle.x - posCourX);
+
 		obstacle.y = posCourY + sgn(destY - posCourY) * ((destY - posCourY) / factor);
+
 		return true;
+
 	} else {
 		return false;
 	}

@@ -1,5 +1,8 @@
 #include "utils.h"
 
+/******************************************
+* Fonction de création des partitions QNX *
+******************************************/
 int create_partitions(sched_aps_create_parms* partitions,
 					  sched_aps_parms* sched_param,
 					  unsigned int* sched_pol) {
@@ -43,6 +46,9 @@ int create_partitions(sched_aps_create_parms* partitions,
 	return EXIT_SUCCESS;
 }
 
+/****************************************
+* Fonction d'assignation des partitions *
+****************************************/
 int assign_partitions(sched_aps_join_parms* join_params,
 		             const sched_aps_create_parms* partitions,
 				     const pthread_t* threads,
@@ -95,8 +101,8 @@ int assign_partitions(sched_aps_join_parms* join_params,
 }
 
 /******************************************************************************
- * Timer initialization routine
- * The function will initialize a timer given the parameters.
+ * Timer initialization routine                                               *
+ * The function will initialize a timer given the parameters.                 *
  *****************************************************************************/
 int32_t init_timer(struct sigevent* event, struct itimerspec* itime,
 		           timer_t* timer, const int32_t chanel_id,

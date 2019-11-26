@@ -61,6 +61,7 @@ class PathMap {
         void getClosestStation(coord_t actualPos, coord_t &stationPos);
         void dumpImage(const char* file_name);
 
+		// Fonction de génération d'obstacle
         bool genObstacle(coord_t actualPos, coord_t dest, coord_t &obstacle);
 
     private:
