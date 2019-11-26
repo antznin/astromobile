@@ -5,8 +5,8 @@
 
 void init();
 
-// Taches
-void * main_worker(void * data); // tache principale
+// Tâches
+void * main_worker(void * data); // tâche principale qui lance les autres
 void cameraControl_worker(void * data);
 void camera_worker(void * data);
 void battery_worker(void * data);
@@ -20,29 +20,22 @@ void destControl_worker(void * data);
 void display_worker(void * data);
 void trace_worker(void * data);
 
+// Nombre total de tâches
 #define THREAD_NUM 12
-
-// periode pour les threads continus
-#define PERIOD_CONT 100
 
 #define PI 3.14159265359
 
-// Maximum de message dans un queue
-#define MAX_NUM_MSG 50
-// Priorités des messages
-#define MSG_PRI_LOW  10
-#define MSG_PRI_MED  20
-#define MSG_PRI_HIGH 30
+// Dans tous les cas, la batterie gagne CONST_CHARGE % par seconde
+#define CONST_CHARGE 5          
+// Coefficient devant la vitesse
+#define COEFF_DECHARGE 0.0001  
+// Quelle que soit la vitesse, la batterie se décharge
+#define CONST_DECHARGE 0.001666	
 
-#define CONST_CHARGE 5          // la batterie gagne 5% par période
-#define COEFF_DECHARGE 0.0001   // 1/(60*30)
-								// la batterie perd coeff*vitesse par
-								// minute en décharge, donc 1% perdu par minute quand elle roule a 30
-#define CONST_DECHARGE 0.001666	// 1/(60*10)
+#define DIST_STEP 10    // Distance de détection d'une étape
+#define DIST_OBSTACLE 5 // Distance de détection d'un obstacle
 
-#define DIST_STEP 10
-#define DIST_OBSTACLE 5
-
+// Structure de données servant à stocker les données physiques de la voiture
 struct physicsData {
 	float speed;
 	float battLevel;
@@ -50,13 +43,13 @@ struct physicsData {
 	coord_t currPos;
 };
 
-// État de la machine pour la machine à états
+// État de la voiture pour la machine à états
 enum carState {GOTO_DEST, PRE_BATT_LOW, BATT_LOW, CHARGING, PRE_OBSTACLE, OBSTACLE};
 
-// vitesses possibles
+// vitesses possibles : 0, 30, 50 km/h
 enum speeds {VIT0, VIT30, VIT50};
 
-// Mutex pour protéger
+// Mutex pour protéger les données physiques
 pthread_mutex_t mutDataSpeed     = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutDataBattLevel = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutDataAngle     = PTHREAD_MUTEX_INITIALIZER;
