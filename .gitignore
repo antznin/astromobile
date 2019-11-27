@@ -1,6 +1,6 @@
 *.swp
 *.swo
-lab03/.metadata
-lab03/astromobile/build
-lab03/192.*
-lab03/astromobile/astromobile.core
+*/.metadata
+*/astromobile/build
+*/192.*
+*/astromobile/astromobile.core
